@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        getUserData().role == 'admin' ||
+        request.auth.token.email == 'excelenciaoperativamg@gmail.com'
+      );
+    }
+
+    function isSSTLead() {
+      return isSignedIn() && (isAdmin() || getUserData().role == 'sst_lead');
+    }
+
+    function isSiteLead(siteId) {
+      return isSignedIn() && (
+        isAdmin() || 
+        isSSTLead() || 
+        (getUserData().role == 'site_lead' && getUserData().siteId == siteId)
+      );
+    }
+
+    function isViewer() {
+      return isSignedIn();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Catalogs: Sedes, Supervisores, EPS, ARL
+    match /sedes/{sedeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /supervisores/{supId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /eps/{epsId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /arl/{arlId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Maestro de Personal
+    match /personnel/{workerId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() || isSSTLead();
+      allow delete: if false; // Regla de oro: No eliminar físicamente trabajadores
+    }
+
+    match /import_history/{historyId} {
+      allow read: if isAdmin() || isSSTLead();
+      allow create: if isAdmin() || isSSTLead();
+      allow update, delete: if false; // Inmutable
+    }
+
+    // Registros SST
+    match /sst_records/{recordId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isSSTLead() ||
+        (getUserData().role == 'site_lead' && resource.data.sedeId == getUserData().siteId) ||
+        getUserData().role == 'viewer'
+      );
+
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        isSSTLead() ||
+        (getUserData().role == 'site_lead' && request.resource.data.sedeId == getUserData().siteId)
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        isSSTLead() ||
+        (getUserData().role == 'site_lead' && resource.data.sedeId == getUserData().siteId)
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Auditoría (Inmutable)
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() || isSSTLead();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Nunca modificable ni eliminable
+    }
+  }
+}

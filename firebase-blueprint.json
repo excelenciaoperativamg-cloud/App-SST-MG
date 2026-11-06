@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Usuario del sistema SST con rol y sede asignada",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["admin", "sst_lead", "site_lead", "viewer"] },
+        "siteId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Sede": {
+      "title": "Sede",
+      "description": "Sede de trabajo operativa de MG Consultores",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "codigo": { "type": "string" },
+        "nombre": { "type": "string" },
+        "ciudad": { "type": "string" },
+        "direccion": { "type": "string" },
+        "activa": { "type": "boolean" }
+      },
+      "required": ["id", "codigo", "nombre"]
+    },
+    "Supervisor": {
+      "title": "Supervisor",
+      "description": "Supervisor o líder de área por sede",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sedeId": { "type": "string" },
+        "area": { "type": "string" },
+        "supervisor": { "type": "string" }
+      },
+      "required": ["id", "sedeId", "area", "supervisor"]
+    },
+    "PersonnelWorker": {
+      "title": "PersonnelWorker",
+      "description": "Registro único del maestro de personal por cédula",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "cedula": { "type": "string" },
+        "nombre": { "type": "string" },
+        "fechaNacimiento": { "type": "string" },
+        "edad": { "type": "number" },
+        "genero": { "type": "string", "enum": ["M", "F", "OTRO"] },
+        "sedeId": { "type": "string" },
+        "fechaIngreso": { "type": "string" },
+        "puesto": { "type": "string" },
+        "estado": { "type": "string", "enum": ["ACTIVO", "INACTIVO"] }
+      },
+      "required": ["id", "cedula", "nombre", "sedeId", "puesto", "estado"]
+    },
+    "SSTRecord": {
+      "title": "SSTRecord",
+      "description": "Registro o inspección operativa de SST",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "numeroRegistro": { "type": "string" },
+        "menuId": { "type": "string" },
+        "subMenuId": { "type": "string" },
+        "fecha": { "type": "string" },
+        "sedeId": { "type": "string" },
+        "area": { "type": "string" },
+        "responsableRegistro": { "type": "string" },
+        "estado": { "type": "string", "enum": ["BORRADOR", "PENDIENTE", "EN_PROCESO", "CERRADO"] },
+        "observaciones": { "type": "string" }
+      },
+      "required": ["id", "numeroRegistro", "menuId", "subMenuId", "fecha", "sedeId", "area", "estado"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Trazabilidad inmutable de cambios y accesos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fecha": { "type": "string" },
+        "usuarioEmail": { "type": "string" },
+        "accion": { "type": "string" },
+        "modulo": { "type": "string" },
+        "descripcion": { "type": "string" }
+      },
+      "required": ["id", "fecha", "usuarioEmail", "accion", "modulo"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Perfiles y roles de usuarios"
+    },
+    "/sedes/{sedeId}": {
+      "schema": "Sede",
+      "description": "Catálogo oficial de sedes"
+    },
+    "/supervisores/{supId}": {
+      "schema": "Supervisor",
+      "description": "Catálogo de supervisores por área y sede"
+    },
+    "/personnel/{workerId}": {
+      "schema": "PersonnelWorker",
+      "description": "Maestro único de trabajadores de MG Consultores"
+    },
+    "/sst_records/{recordId}": {
+      "schema": "SSTRecord",
+      "description": "Registros de inspecciones y formatos SST"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Registro histórico de auditoría inmutable"
+    }
+  }
+}

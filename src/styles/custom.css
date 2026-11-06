@@ -1,0 +1,109 @@
+/* Estilos CSS3 Personalizados - MG Consultores SG-SST */
+
+:root {
+  --mg-navy: #0A2958;
+  --mg-navy-light: #123e7e;
+  --mg-navy-dark: #061936;
+  --mg-red: #E60000;
+  --mg-red-hover: #c40000;
+  --mg-red-light: #fff1f1;
+  --mg-slate-bg: #f8fafc;
+  --mg-border: #e2e8f0;
+  --mg-focus-ring: rgba(10, 41, 88, 0.4);
+}
+
+/* Accesibilidad y Foco Visible */
+:focus-visible {
+  outline: 2px solid var(--mg-navy);
+  outline-offset: 2px;
+}
+
+/* Animaciones CSS3 */
+@keyframes fadeInSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Barras de desplazamiento estilizadas */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Estilos de Impresión Profesional (@media print) para Fichas y Actas SST */
+@media print {
+  /* Ocultar elementos de navegación y acciones */
+  aside,
+  header,
+  nav,
+  button,
+  .no-print,
+  [role="banner"] {
+    display: none !important;
+  }
+
+  body,
+  main,
+  #root,
+  .app-container {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Asegurar salto de página limpio */
+  .page-break {
+    page-break-before: always;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 10px !important;
+  }
+}

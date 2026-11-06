@@ -1,0 +1,6 @@
+{
+  "name": "Plataforma SST MG Consultores",
+  "description": "Plataforma web interna para la gestión integral de Seguridad y Salud en el Trabajo (SST) de MG Consultores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
