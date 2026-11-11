@@ -274,4 +274,179 @@ export const exportService = {
 
     doc.save(`Registro_${record.numeroRegistro}.pdf`);
   },
+
+  /**
+   * Generates official Acta de Entrega de EPP (PDF)
+   */
+  generateEPPDeliveryPDF(delivery: import('../types/epp').EPPDeliveryRecord) {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Top Header Banner
+    doc.setFillColor(10, 41, 88); // #0A2958
+    doc.rect(0, 0, pageWidth, 28, 'F');
+
+    // Red accent stripe
+    doc.setFillColor(230, 0, 0); // #E60000
+    doc.rect(0, 28, pageWidth, 3, 'F');
+
+    // Header Text
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('MG CONSULTORES S.A.S.', 14, 13);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('SISTEMA DE GESTIÓN DE SEGURIDAD Y SALUD EN EL TRABAJO (SG-SST)', 14, 19);
+    doc.text('FORMATO OFICIAL: REGISTRO DE ENTREGA Y REPOSICIÓN DE EPP', 14, 25);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`ACTA N°: ${delivery.numeroActa}`, pageWidth - 14, 16, { align: 'right' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Sede: ${delivery.sedeId}`, pageWidth - 14, 23, { align: 'right' });
+
+    // Title Section
+    doc.setTextColor(10, 41, 88);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ACTA DE ENTREGA DE ELEMENTOS DE PROTECCIÓN PERSONAL (EPP)', 14, 38);
+
+    // Meta Information Table
+    const metaData = [
+      ['Fecha de Entrega:', delivery.fecha, 'Estado Acta:', delivery.estado.replace('_', ' ')],
+      ['Trabajador Receptor:', delivery.nombreTrabajador, 'Cédula / ID:', delivery.cedulaTrabajador],
+      ['Puesto / Cargo:', delivery.puestoTrabajador, 'Área / Sección:', delivery.area],
+      ['Sede Operativa:', delivery.sedeId, 'Motivo de Entrega:', delivery.motivo.replace('_', ' ')],
+      ['Responsable SST:', delivery.responsableEntrega, 'Supervisor Área:', delivery.supervisor || 'N/A'],
+    ];
+
+    autoTable(doc, {
+      startY: 42,
+      body: metaData,
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [10, 41, 88], cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [10, 41, 88], cellWidth: 38 },
+        3: { cellWidth: 57 },
+      },
+    });
+
+    // Delivered Items Table
+    let currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    doc.setFontSize(10);
+    doc.setTextColor(10, 41, 88);
+    doc.setFont('helvetica', 'bold');
+    doc.text('1. Elementos de Protección Personal Suministrados', 14, currentY);
+
+    const itemsRows = delivery.items.map((it, idx) => [
+      String(idx + 1),
+      it.categoria.replace('_', ' / '),
+      it.nombre,
+      String(it.cantidad),
+      it.talla || 'Estándar',
+      it.estado,
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [['#', 'Categoría', 'Descripción del Elemento', 'Cant.', 'Talla', 'Estado']],
+      body: itemsRows,
+      theme: 'grid',
+      headStyles: { fillColor: [10, 41, 88], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2.5 },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 35, fontStyle: 'bold', textColor: [10, 41, 88] },
+        2: { cellWidth: 85 },
+        3: { cellWidth: 15, halign: 'center' },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 25, halign: 'center' },
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // Observations
+    if (delivery.observaciones) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(10, 41, 88);
+      doc.text('2. Observaciones Adicionales', 14, currentY);
+      autoTable(doc, {
+        startY: currentY + 2,
+        body: [[delivery.observaciones]],
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2.5, textColor: [51, 65, 85] },
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    // Legal Commitment Clause
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(10, 41, 88);
+    doc.text('3. Declaración de Recepción y Compromiso del Trabajador', 14, currentY);
+
+    const legalText =
+      'Declaro haber recibido en perfecto estado de funcionamiento y asepsia los Elementos de Protección Personal (EPP) detallados en la presente acta. Manifiesto que recibí capacitación sobre su adecuado uso, inspección rutinaria, limpieza y almacenamiento. Me comprometo a utilizarlos de manera obligatoria durante toda la jornada laboral y a reportar inmediatamente a SST cualquier anomalía o desgaste para su respectivo reemplazo (Resolución 2400 de 1979 y Decreto 1072 de 2015).';
+
+    autoTable(doc, {
+      startY: currentY + 2,
+      body: [[legalText]],
+      theme: 'plain',
+      styles: { fontSize: 7.5, cellPadding: 3, textColor: [71, 85, 105], fontStyle: 'italic' },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Check space for signatures
+    if (doc.internal.pageSize.getHeight() - currentY < 40) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    // Signatures
+    const sigY = currentY + 22;
+
+    // Signature 1: Responsable SST
+    doc.setDrawColor(148, 163, 184);
+    doc.line(14, sigY, 90, sigY);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(delivery.responsableEntrega || 'Responsable SST', 14, sigY + 4);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Entregado por: Líder / Responsable SST', 14, sigY + 8);
+
+    // Signature 2: Trabajador Receptor
+    doc.line(110, sigY, 196, sigY);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(delivery.nombreTrabajador, 110, sigY + 4);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Recibido conforme - C.C. ${delivery.cedulaTrabajador}`, 110, sigY + 8);
+
+    // Footer
+    const footerY = doc.internal.pageSize.getHeight() - 8;
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      'MG Consultores S.A.S. | Registro Oficial de Dotación y EPP | Sistema de Gestión de Seguridad y Salud en el Trabajo',
+      pageWidth / 2,
+      footerY,
+      { align: 'center' }
+    );
+
+    doc.save(`Acta_Entrega_EPP_${delivery.numeroActa}.pdf`);
+  },
 };
+

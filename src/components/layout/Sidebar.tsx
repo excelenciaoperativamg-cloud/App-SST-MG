@@ -1,27 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  LayoutDashboard,
   Users2,
-  Database,
-  FileSpreadsheet,
-  DownloadCloud,
-  History,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  ShieldAlert,
-  HardHat,
-  Flame,
-  ClipboardCheck,
-  Users,
-  Truck,
-  HeartPulse,
-  Sparkles,
+  Shield,
+  Lock,
+  LogOut,
   X,
-  FileText,
+  Building2,
+  User,
+  Settings,
+  History,
+  Database,
+  Sparkles,
 } from 'lucide-react';
 import { MGLogo } from '../common/MGLogo';
-import { SST_MODULES } from '../../config/constants';
 import { useAuth } from '../../context/AuthContext';
 import { useSST } from '../../context/SSTContext';
 
@@ -29,58 +20,28 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   activeView: string;
-  activeModuleId?: string;
-  activeSubMenuId?: string;
-  onNavigate: (view: string, moduleId?: string, subMenuId?: string) => void;
+  onNavigate: (view: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   activeView,
-  activeModuleId,
-  activeSubMenuId,
   onNavigate,
 }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { stats } = useSST();
-  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({
-    d19d30b0: true, // Emergency inspections open by default
-    c9189227: true, // Personal open by default
-  });
 
-  const toggleModule = (modId: string) => {
-    setExpandedModules((prev) => ({
-      ...prev,
-      [modId]: !prev[modId],
-    }));
-  };
-
-  const getModuleIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'ShieldAlert':
-        return <ShieldAlert className="h-4 w-4" />;
-      case 'HardHat':
-        return <HardHat className="h-4 w-4" />;
-      case 'Flame':
-        return <Flame className="h-4 w-4 text-orange-400" />;
-      case 'ClipboardCheck':
-        return <ClipboardCheck className="h-4 w-4" />;
-      case 'Users':
-        return <Users className="h-4 w-4" />;
-      case 'Truck':
-        return <Truck className="h-4 w-4" />;
-      case 'HeartPulse':
-        return <HeartPulse className="h-4 w-4 text-rose-400" />;
-      case 'Sparkles':
-        return <Sparkles className="h-4 w-4 text-amber-400" />;
-      default:
-        return <FileText className="h-4 w-4" />;
-    }
-  };
-
-  const isModuleActive = (moduleId: string) => activeView === 'sst_module' && activeModuleId === moduleId;
-  const isSubMenuActive = (subId: string) => activeView === 'sst_module' && activeSubMenuId === subId;
+  const INACTIVE_MODULES = [
+    { id: 'salud', nombre: 'Salud', submenus: ['Agenda Médica', 'Atenciones en Campo', 'Pausas Saludables', 'Reporte Salud'] },
+    { id: 'pesv', nombre: 'PESV', submenus: ['Chequeo Vehículos'] },
+    { id: 'personal_otros', nombre: 'Personal (Otros)', submenus: ['Condiciones Inseguras', 'PAT_SST'] },
+    { id: '5s', nombre: '5S', submenus: ['Orden y Aseo'] },
+    { id: 'contratistas', nombre: 'Contratistas', submenus: ['Seguimiento Contratistas', 'Selección Contratistas'] },
+    { id: 'emergencias', nombre: 'Inspección Emergencias', submenus: ['Cilindros', 'Extintores', 'Kit Derrames', 'Sensores de humo'] },
+    { id: 'integrales', nombre: 'Inspecciones Integrales', submenus: ['Inspecciones Integrales'] },
+    { id: 'rondas', nombre: 'Rondas de Cuidado', submenus: ['Rondas de Cuidado'] },
+  ];
 
   return (
     <>
@@ -114,219 +75,170 @@ export const Sidebar: React.FC<SidebarProps> = ({
           aria-label="Menú principal de módulos SST"
           className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-white/20"
         >
-          {/* Main Dashboard */}
+          {/* Active Module Section: Personal ➔ Entrega EPP's */}
           <div>
-            <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Principal
-            </p>
-            <button
-              onClick={() => onNavigate('dashboard')}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
-                activeView === 'dashboard'
-                  ? 'bg-[#E60000] text-white shadow-md'
-                  : 'text-slate-200 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
-              <span>Panel de Control</span>
-            </button>
-          </div>
-
-          {/* Master Personnel */}
-          <div>
-            <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Gestión de Personas
-            </p>
-            <button
-              onClick={() => onNavigate('personnel')}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
-                activeView === 'personnel'
-                  ? 'bg-[#E60000] text-white shadow-md'
-                  : 'text-slate-200 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Users2 className="h-4 w-4 flex-shrink-0" />
-                <span>Maestro de Personal</span>
-              </div>
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">
-                {stats.activeWorkers}
-              </span>
-            </button>
-          </div>
-
-          {/* The 8 Official SST Modules */}
-          <div>
-            <div className="flex items-center justify-between px-3 mb-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Módulos SST (Excel)
+            <div className="flex items-center justify-between px-3 mb-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                MÓDULO ACTIVO (FASE 1)
               </p>
-              <span className="text-[10px] font-bold text-red-300 bg-red-950/70 border border-red-800/60 px-1.5 py-0.2 rounded">
-                8 MÓDULOS
+              <span className="text-[9px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.2 rounded">
+                OPERATIVO
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              {/* Entrega EPP's - Primary Target */}
+              <button
+                onClick={() => onNavigate('epp_delivery')}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                  activeView === 'epp_delivery'
+                    ? 'bg-[#E60000] text-white shadow-lg ring-2 ring-red-400/50'
+                    : 'text-white bg-white/10 hover:bg-white/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Shield className="h-4 w-4 text-emerald-300 flex-shrink-0" />
+                  <div className="text-left">
+                    <div className="leading-tight">Personal</div>
+                    <div className="text-[11px] opacity-90 font-normal">Entrega EPP's</div>
+                  </div>
+                </div>
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">
+                  Activo
+                </span>
+              </button>
+
+              {/* Maestro de Personal */}
+              <button
+                onClick={() => onNavigate('personnel')}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+                  activeView === 'personnel'
+                    ? 'bg-[#E60000] text-white shadow-md'
+                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Users2 className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                  <span>Maestro de Personal</span>
+                </div>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-300">
+                  {stats.activeWorkers}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Inactive Modules Section: Módulos Inactivos */}
+          <div>
+            <div className="flex items-center justify-between px-3 mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Módulos Inactivos (Fase 2)
+              </p>
+              <span className="text-[9px] font-bold text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.2 rounded">
+                INACTIVOS
               </span>
             </div>
 
             <div className="space-y-1">
-              {SST_MODULES.map((module) => {
-                const isExpanded = !!expandedModules[module.id];
-                const activeMod = isModuleActive(module.id);
-                const hasMultipleSubmenus = module.submenus.length > 1;
-
-                return (
-                  <div key={module.id} className="rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => {
-                        if (hasMultipleSubmenus) {
-                          toggleModule(module.id);
-                        } else {
-                          onNavigate('sst_module', module.id, module.submenus[0]?.id);
-                        }
-                      }}
-                      className={`flex w-full items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                        activeMod && !hasMultipleSubmenus
-                          ? 'bg-[#E60000] text-white'
-                          : activeMod
-                          ? 'bg-white/15 text-white'
-                          : 'text-slate-200 hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {getModuleIcon(module.icono)}
-                        <span className="truncate">{module.nombre}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {hasMultipleSubmenus && (
-                          <>
-                            <span className="text-[10px] text-slate-400 bg-white/10 px-1.5 py-0.2 rounded">
-                              {module.submenus.length}
-                            </span>
-                            {isExpanded ? (
-                              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                            ) : (
-                              <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </button>
-
-                    {/* Submenus Dropdown */}
-                    {hasMultipleSubmenus && isExpanded && (
-                      <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-white/20 pl-2">
-                        {module.submenus.map((sub) => {
-                          const activeSub = isSubMenuActive(sub.id);
-                          return (
-                            <button
-                              key={sub.id}
-                              onClick={() => onNavigate('sst_module', module.id, sub.id)}
-                              className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all text-left ${
-                                activeSub
-                                  ? 'bg-[#E60000] text-white font-bold'
-                                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                              }`}
-                            >
-                              <span className="truncate">{sub.nombre}</span>
-                              {sub.formularioOficialPendiente && (
-                                <span
-                                  title="Formato oficial SST pendiente de entrega"
-                                  className="text-[9px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded ml-1"
-                                >
-                                  ESTÁNDAR
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+              {INACTIVE_MODULES.map((mod) => (
+                <div
+                  key={mod.id}
+                  onClick={() => onNavigate(`inactive_${mod.id}`)}
+                  className={`flex w-full items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                    activeView === `inactive_${mod.id}`
+                      ? 'bg-white/15 text-white'
+                      : 'text-slate-400 hover:text-slate-300 hover:bg-white/5'
+                  }`}
+                  title={`${mod.nombre} se encuentra inactivo por directriz de implementación`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Lock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span className="truncate">{mod.nombre}</span>
                   </div>
-                );
-              })}
+                  <span className="text-[9px] text-slate-400 bg-white/5 px-1.5 py-0.2 rounded shrink-0">
+                    Inactivo
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* System & Operations */}
-          <div>
-            <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Operación y Reportes
-            </p>
-            <div className="space-y-1">
-              <button
-                onClick={() => onNavigate('catalogs')}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                  activeView === 'catalogs'
-                    ? 'bg-[#E60000] text-white'
-                    : 'text-slate-200 hover:bg-white/10'
-                }`}
-              >
-                <Database className="h-4 w-4" />
-                <span>Catálogos Generales</span>
-              </button>
+          {/* System & Operations (Admin Only) */}
+          {user?.role === 'admin' && (
+            <div>
+              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Administración
+              </p>
+              <div className="space-y-1">
+                <button
+                  onClick={() => onNavigate('catalogs')}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                    activeView === 'catalogs'
+                      ? 'bg-[#E60000] text-white'
+                      : 'text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  <Database className="h-4 w-4" />
+                  <span>Catálogos (Sedes, EPS, ARL)</span>
+                </button>
 
-              <button
-                onClick={() => onNavigate('reports')}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                  activeView === 'reports'
-                    ? 'bg-[#E60000] text-white'
-                    : 'text-slate-200 hover:bg-white/10'
-                }`}
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                <span>Reportes y Exportaciones</span>
-              </button>
+                <button
+                  onClick={() => onNavigate('audit')}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                    activeView === 'audit'
+                      ? 'bg-[#E60000] text-white'
+                      : 'text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  <History className="h-4 w-4" />
+                  <span>Auditoría de Cambios</span>
+                </button>
 
-              <button
-                onClick={() => onNavigate('backups')}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                  activeView === 'backups'
-                    ? 'bg-[#E60000] text-white'
-                    : 'text-slate-200 hover:bg-white/10'
-                }`}
-              >
-                <DownloadCloud className="h-4 w-4" />
-                <span>Respaldos e Historial</span>
-              </button>
-
-              <button
-                onClick={() => onNavigate('audit')}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                  activeView === 'audit'
-                    ? 'bg-[#E60000] text-white'
-                    : 'text-slate-200 hover:bg-white/10'
-                }`}
-              >
-                <History className="h-4 w-4" />
-                <span>Auditoría de Cambios</span>
-              </button>
-
-              {user?.role === 'admin' && (
                 <button
                   onClick={() => onNavigate('settings')}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                     activeView === 'settings'
                       ? 'bg-[#E60000] text-white'
-                      : 'text-slate-200 hover:bg-white/10'
+                      : 'text-slate-300 hover:bg-white/10'
                   }`}
                 >
                   <Settings className="h-4 w-4" />
-                  <span>Configuración y Usuarios</span>
+                  <span>Gestión de Usuarios</span>
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
-        {/* Footer info badge */}
-        <div className="border-t border-white/10 p-3 bg-[#071d3f]/70 text-[11px] text-slate-400">
-          <div className="flex items-center justify-between">
-            <span>MG Consultores S.A.S.</span>
-            <span className="text-emerald-400 font-semibold flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              SST Online
-            </span>
+        {/* Footer User Info & Logout */}
+        <div className="border-t border-white/10 p-3 bg-[#071d3f]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-[#E60000] text-white font-black text-xs flex items-center justify-center shrink-0">
+                {user?.displayName ? user.displayName.substring(0, 2).toUpperCase() : 'MG'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate leading-tight">
+                  {user?.displayName}
+                </p>
+                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <Building2 className="w-3 h-3 text-[#E60000]" />
+                  <span className="truncate font-semibold text-slate-300">
+                    {user?.role === 'admin' ? 'Todas las Sedes (Admin)' : `Sede ${user?.siteId}`}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-600 mt-0.5">Versión 1.0 - SG-SST</p>
+
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-white/10 hover:bg-red-950/50 hover:text-red-300 text-xs text-slate-300 font-medium transition-colors border border-white/10"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Cerrar Sesión</span>
+          </button>
         </div>
       </aside>
     </>

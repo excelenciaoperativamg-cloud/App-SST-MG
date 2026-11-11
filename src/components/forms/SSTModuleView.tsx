@@ -41,6 +41,7 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
   const [search, setSearch] = useState('');
   const [selectedSede, setSelectedSede] = useState('TODAS');
   const [selectedEstado, setSelectedEstado] = useState<string>('TODOS');
+  const [viewMode, setViewMode] = useState<'table' | 'submodule_cards'>('table');
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [recordToEdit, setRecordToEdit] = useState<SSTRecord | null>(null);
 
@@ -129,50 +130,174 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
         </div>
       </div>
 
-      {/* Submenu Navigation Tabs */}
+      {/* Submenu Navigation & View Mode Toggle */}
       {currentModule.submenus.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
-          {currentModule.submenus.map((sub) => {
-            const isSelected = activeSub?.id === sub.id;
-            const count = records.filter((r) => r.subMenuId === sub.id).length;
-            return (
-              <button
-                key={sub.id}
-                onClick={() => onSelectSubMenu(sub.id)}
-                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-all ${
-                  isSelected
-                    ? 'bg-[#0A2958] text-white shadow-sm'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <span>{sub.nombre}</span>
-                <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3">
+          {/* Submenu Tabs */}
+          <div className="flex flex-wrap gap-1.5">
+            {currentModule.submenus.map((sub) => {
+              const isSelected = activeSub?.id === sub.id;
+              const count = records.filter((r) => r.subMenuId === sub.id).length;
+              return (
+                <button
+                  key={sub.id}
+                  onClick={() => {
+                    onSelectSubMenu(sub.id);
+                    setViewMode('table');
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-all ${
+                    isSelected && viewMode === 'table'
+                      ? 'bg-[#0A2958] text-white shadow-sm ring-2 ring-[#0A2958]'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                  <span>{sub.nombre}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                      isSelected && viewMode === 'table' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Notice on pending official SST format */}
-      {activeSub?.formularioOficialPendiente && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold">
-              Submódulo: {activeSub.nombre} (Espacio de trabajo operativo listo)
-            </p>
-            <p className="text-amber-800">
-              Este submódulo opera con el motor estándar de registros SST (código único, sede, área, supervisor, trabajador del maestro, evidencias fotográficas, observaciones y trazabilidad). La plantilla específica de campo oficial de MG Consultores se integrará progresivamente según la entrega documental.
-            </p>
+          {/* View Mode Toggle: Cards vs Table */}
+          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 border border-slate-200 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                viewMode === 'table'
+                  ? 'bg-white text-[#0A2958] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Registros ({filteredRecords.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('submodule_cards')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                viewMode === 'submodule_cards'
+                  ? 'bg-[#0A2958] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Catálogo de Submódulos ({currentModule.submenus.length})
+            </button>
           </div>
         </div>
       )}
+
+      {/* When viewMode is submodule_cards: Show the visual cards exactly like the reference screenshot */}
+      {viewMode === 'submodule_cards' && currentModule.submenus.length > 1 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+              Subprocesos e Inspecciones Disponibles ({currentModule.nombre})
+            </h2>
+            <span className="text-xs text-slate-500">
+              Selecciona un submódulo para ver sus registros o realizar una nueva inspección
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {currentModule.submenus.map((sub, idx) => {
+              const subRecords = records.filter((r) => r.subMenuId === sub.id);
+              const cardHeaderBg = sub.headerColor || currentModule.headerColor || 'bg-[#0A2958]';
+              const cardButtonBg = sub.buttonColor || currentModule.buttonColor || 'bg-[#0A2958] hover:bg-blue-900';
+
+              return (
+                <article
+                  key={sub.id}
+                  className="flex flex-col rounded-2xl bg-white shadow-md border border-slate-200/90 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 group text-left"
+                >
+                  {/* Colorful Top Header Bar */}
+                  <div className={`${cardHeaderBg} px-5 py-4 flex items-center gap-3 relative transition-colors`}>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-xs border border-white/30 flex-shrink-0 shadow-xs text-white font-black text-sm">
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-white tracking-wide truncate">
+                        {sub.nombre}
+                      </h3>
+                      <span className="text-[10px] text-white/85 font-medium block">
+                        Código: {sub.codigo}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* White Card Body */}
+                  <div className="p-5 flex flex-col justify-between flex-1 bg-white space-y-4">
+                    <div>
+                      <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed line-clamp-3 min-h-[42px]">
+                        {sub.descripcion}
+                      </p>
+
+                      <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <span className="font-medium text-slate-600">Historial de inspecciones</span>
+                        <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
+                          {subRecords.length} registros
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Button labeled "ACCEDER" in matching color */}
+                    <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectSubMenu(sub.id);
+                          setViewMode('table');
+                        }}
+                        className={`w-full py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-white ${cardButtonBg} shadow-sm transition-all duration-150 flex items-center justify-center gap-2 group-hover:brightness-105 active:scale-[0.99]`}
+                      >
+                        <span>ACCEDER</span>
+                        <ExternalLink className="h-4 w-4" />
+                      </button>
+
+                      {canEdit() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectSubMenu(sub.id);
+                            handleCreateNew();
+                          }}
+                          className="w-full py-1.5 px-3 rounded-lg text-[11px] font-bold text-[#0A2958] bg-blue-50 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 border border-blue-200/60"
+                        >
+                          <Plus className="h-3.5 w-3.5 text-[#E60000]" />
+                          <span>Diligenciar Inspección</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Table View (Filters and Records) */}
+      {viewMode === 'table' && (
+        <div className="space-y-6">
+          {/* Notice on pending official SST format */}
+          {activeSub?.formularioOficialPendiente && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold">
+                  Submódulo: {activeSub.nombre} (Espacio de trabajo operativo listo)
+                </p>
+                <p className="text-amber-800">
+                  Este submódulo opera con el motor estándar de registros SST (código único, sede, área, supervisor, trabajador del maestro, evidencias fotográficas, observaciones y trazabilidad). La plantilla específica de campo oficial de MG Consultores se integrará progresivamente según la entrega documental.
+                </p>
+              </div>
+            </div>
+          )}
 
       {/* Filter and Action Toolbar */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -339,6 +464,8 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
           </table>
         </div>
       </div>
+    </div>
+  )}
 
       {/* Dynamic Form Modal */}
       <DynamicSSTFormModal

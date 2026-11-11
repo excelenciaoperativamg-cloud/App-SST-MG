@@ -73,6 +73,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'Rondas de Cuidado',
     icono: 'ShieldAlert',
     descripcion: 'Supervisión en sitio y verificación de comportamientos seguros y condiciones de trabajo.',
+    headerColor: 'bg-[#E60000]',
+    buttonColor: 'bg-[#E60000] hover:bg-red-700',
+    badgeBg: 'bg-red-50 text-red-700 border-red-200',
     submenus: [
       {
         id: 'sub-rc-1',
@@ -80,6 +83,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Rondas de Cuidado',
         descripcion: 'Inspección de rondas operativas en puestos de trabajo.',
         codigo: 'RC_RONDAS',
+        headerColor: 'bg-[#E60000]',
+        buttonColor: 'bg-[#E60000] hover:bg-red-700',
         formularioOficialPendiente: true,
       },
     ],
@@ -90,6 +95,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'Contratistas',
     icono: 'HardHat',
     descripcion: 'Gestión, selección, afiliaciones y control operacional de empresas contratistas.',
+    headerColor: 'bg-[#9333EA]',
+    buttonColor: 'bg-[#9333EA] hover:bg-purple-700',
+    badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
     submenus: [
       {
         id: 'sub-ct-1',
@@ -97,6 +105,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Seguimiento Contratistas',
         descripcion: 'Control periódico de ejecución y cumplimiento de normas SST por contratistas.',
         codigo: 'CT_SEGUIMIENTO',
+        headerColor: 'bg-[#9333EA]',
+        buttonColor: 'bg-[#9333EA] hover:bg-purple-700',
         formularioOficialPendiente: true,
       },
       {
@@ -105,6 +115,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Selección Contratistas',
         descripcion: 'Evaluación inicial de requisitos SST para admisión y contratación.',
         codigo: 'CT_SELECCION',
+        headerColor: 'bg-[#7E22CE]',
+        buttonColor: 'bg-[#7E22CE] hover:bg-purple-800',
         formularioOficialPendiente: true,
       },
     ],
@@ -114,7 +126,10 @@ export const SST_MODULES: MenuModuleConfig[] = [
     nombre: 'Inspección Emergencias',
     vista: 'Inspección Emergencias',
     icono: 'Flame',
-    descripcion: 'Inspecciones periódicas de equipos de protección contra fuego y atención de emergencias.',
+    descripcion: 'Inspecciones periódicas de equipos de protección contra fuego, extintores y atención de emergencias.',
+    headerColor: 'bg-[#EA580C]',
+    buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
+    badgeBg: 'bg-orange-50 text-orange-700 border-orange-200',
     submenus: [
       {
         id: 'sub-em-1',
@@ -122,6 +137,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Extintores',
         descripcion: 'Verificación de vigencia, presión, precinto, señalización y ubicación de extintores.',
         codigo: 'EM_EXTINTORES',
+        headerColor: 'bg-[#EA580C]',
+        buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
         formularioOficialPendiente: true,
       },
       {
@@ -130,6 +147,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Cilindros',
         descripcion: 'Control e inspección de gases comprimidos, anclajes y válvulas de seguridad.',
         codigo: 'EM_CILINDROS',
+        headerColor: 'bg-[#C2410C]',
+        buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
         formularioOficialPendiente: true,
       },
       {
@@ -138,6 +157,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Camillas',
         descripcion: 'Estado físico, correas, limpieza y señalización de camillas de primeros auxilios.',
         codigo: 'EM_CAMILLAS',
+        headerColor: 'bg-[#EA580C]',
+        buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
         formularioOficialPendiente: true,
       },
       {
@@ -146,6 +167,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Kit Derrames',
         descripcion: 'Chequeo de paños absorbentes, cordones, guantes y palas del kit de derrames.',
         codigo: 'EM_KIT_DERRAMES',
+        headerColor: 'bg-[#C2410C]',
+        buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
         formularioOficialPendiente: true,
       },
       {
@@ -154,6 +177,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Sensores de humo',
         descripcion: 'Pruebas de operatividad, baterías y cobertura de detectores de humo y fuego.',
         codigo: 'EM_SENSORES_HUMO',
+        headerColor: 'bg-[#EA580C]',
+        buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
         formularioOficialPendiente: true,
       },
       {
@@ -162,6 +187,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Lámpara Emergencia',
         descripcion: 'Revisión de autonomía eléctrica, focos y estado de luminarias de evacuación.',
         codigo: 'EM_LAMPARAS',
+        headerColor: 'bg-[#C2410C]',
+        buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
         formularioOficialPendiente: true,
       },
       {
@@ -170,6 +197,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Lava Ojos',
         descripcion: 'Prueba de flujo hídrico, limpieza de tapas y presión en estaciones de lava ojos.',
         codigo: 'EM_LAVA_OJOS',
+        headerColor: 'bg-[#EA580C]',
+        buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
         formularioOficialPendiente: true,
       },
       {
@@ -178,6 +207,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Kit rescate acuático',
         descripcion: 'Inspección de salvavidas, aros, cuerdas y chalecos de rescate.',
         codigo: 'EM_RESCATE_ACUATICO',
+        headerColor: 'bg-[#C2410C]',
+        buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
         formularioOficialPendiente: true,
       },
     ],
@@ -188,6 +219,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'Inspecciones Integrales',
     icono: 'ClipboardCheck',
     descripcion: 'Inspecciones planeadas multidimensionales de instalaciones y puestos de trabajo.',
+    headerColor: 'bg-[#16A34A]',
+    buttonColor: 'bg-[#16A34A] hover:bg-green-700',
+    badgeBg: 'bg-green-50 text-green-700 border-green-200',
     submenus: [
       {
         id: 'sub-ii-1',
@@ -195,6 +229,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'M_InsIntegrales',
         descripcion: 'Matriz e inspección integral por sede y áreas críticas de operación.',
         codigo: 'II_MINSINTEGRALES',
+        headerColor: 'bg-[#16A34A]',
+        buttonColor: 'bg-[#16A34A] hover:bg-green-700',
         formularioOficialPendiente: true,
       },
     ],
@@ -205,6 +241,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'Personal',
     icono: 'Users',
     descripcion: 'Gestión de elementos de protección personal, actos inseguros y plan anual de trabajo.',
+    headerColor: 'bg-[#0A2958]',
+    buttonColor: 'bg-[#0A2958] hover:bg-[#123970]',
+    badgeBg: 'bg-blue-50 text-blue-800 border-blue-200',
     submenus: [
       {
         id: 'sub-per-1',
@@ -212,6 +251,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Entrega EPP\'s',
         descripcion: 'Constancia de entrega y renovación de Elementos de Protección Personal.',
         codigo: 'PER_ENTREGA_EPP',
+        headerColor: 'bg-[#0A2958]',
+        buttonColor: 'bg-[#0A2958] hover:bg-[#123970]',
         formularioOficialPendiente: true,
       },
       {
@@ -220,6 +261,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Condiciones Inseguras',
         descripcion: 'Reporte e intervención de actos y condiciones subestándar en puestos de trabajo.',
         codigo: 'PER_CONDICIONES_INSEGURAS',
+        headerColor: 'bg-[#0f3a7a]',
+        buttonColor: 'bg-[#0f3a7a] hover:bg-[#174894]',
         formularioOficialPendiente: true,
       },
       {
@@ -228,6 +271,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'PAT_SST',
         descripcion: 'Seguimiento a compromisos del Plan Anual de Trabajo en SST.',
         codigo: 'PER_PAT_SST',
+        headerColor: 'bg-[#0A2958]',
+        buttonColor: 'bg-[#0A2958] hover:bg-[#123970]',
         formularioOficialPendiente: true,
       },
     ],
@@ -238,6 +283,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'PESV',
     icono: 'Truck',
     descripcion: 'Plan Estratégico de Seguridad Vial - Control de vehículos, motocicletas y conductores.',
+    headerColor: 'bg-[#4F46E5]',
+    buttonColor: 'bg-[#4F46E5] hover:bg-indigo-700',
+    badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     submenus: [
       {
         id: 'sub-pesv-1',
@@ -245,6 +293,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Chequeo Vehículos',
         descripcion: 'Inspección preoperacional diaria de automotores, frenos, llantas y documentos.',
         codigo: 'PESV_CHEQUEO',
+        headerColor: 'bg-[#4F46E5]',
+        buttonColor: 'bg-[#4F46E5] hover:bg-indigo-700',
         formularioOficialPendiente: true,
       },
     ],
@@ -255,6 +305,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: 'Salud',
     icono: 'HeartPulse',
     descripcion: 'Medicina preventiva, valoraciones ocupacionales, pausas activas y primeros auxilios.',
+    headerColor: 'bg-[#0D9488]',
+    buttonColor: 'bg-[#0D9488] hover:bg-teal-700',
+    badgeBg: 'bg-teal-50 text-teal-700 border-teal-200',
     submenus: [
       {
         id: 'sub-sal-1',
@@ -262,6 +315,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Agenda Médica',
         descripcion: 'Programación de exámenes médicos periódicos, de ingreso y egreso.',
         codigo: 'SAL_AGENDA_MEDICA',
+        headerColor: 'bg-[#0D9488]',
+        buttonColor: 'bg-[#0D9488] hover:bg-teal-700',
         formularioOficialPendiente: true,
       },
       {
@@ -270,6 +325,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Atenciones en Campo',
         descripcion: 'Registro de valoraciones de enfermería, signos vitales y primeros auxilios en sitio.',
         codigo: 'SAL_ATENCIONES_CAMPO',
+        headerColor: 'bg-[#0F766E]',
+        buttonColor: 'bg-[#0F766E] hover:bg-teal-800',
         formularioOficialPendiente: true,
       },
       {
@@ -278,6 +335,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Pausas Saludables',
         descripcion: 'Registro de asistencia y ejecución de pausas activas osteomusculares.',
         codigo: 'SAL_PAUSAS_SALUDABLES',
+        headerColor: 'bg-[#0D9488]',
+        buttonColor: 'bg-[#0D9488] hover:bg-teal-700',
         formularioOficialPendiente: true,
       },
       {
@@ -286,6 +345,8 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Reporte Salud',
         descripcion: 'Consolidado epidemiológico y seguimiento a sintomáticos o restricciones.',
         codigo: 'SAL_REPORTE_SALUD',
+        headerColor: 'bg-[#0F766E]',
+        buttonColor: 'bg-[#0F766E] hover:bg-teal-800',
         formularioOficialPendiente: true,
       },
     ],
@@ -296,6 +357,9 @@ export const SST_MODULES: MenuModuleConfig[] = [
     vista: '5S',
     icono: 'Sparkles',
     descripcion: 'Metodología 5S: Clasificación, Orden, Limpieza, Estandarización y Disciplina.',
+    headerColor: 'bg-[#D97706]',
+    buttonColor: 'bg-[#D97706] hover:bg-amber-700',
+    badgeBg: 'bg-amber-50 text-amber-700 border-amber-200',
     submenus: [
       {
         id: 'sub-5s-1',
@@ -303,8 +367,11 @@ export const SST_MODULES: MenuModuleConfig[] = [
         nombre: 'Orden y Aseo',
         descripcion: 'Auditoría y calificación de estándares de orden, señalización y aseo en áreas.',
         codigo: '5S_ORDEN_ASEO',
+        headerColor: 'bg-[#D97706]',
+        buttonColor: 'bg-[#D97706] hover:bg-amber-700',
         formularioOficialPendiente: true,
       },
     ],
   },
 ];
+

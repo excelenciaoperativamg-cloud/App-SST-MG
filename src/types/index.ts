@@ -109,6 +109,8 @@ export interface SubMenuConfig {
   descripcion: string;
   codigo: string;
   icono?: string;
+  headerColor?: string;
+  buttonColor?: string;
   formularioOficialPendiente?: boolean;
 }
 
@@ -118,8 +120,12 @@ export interface MenuModuleConfig {
   vista: string;
   icono: string;
   descripcion: string;
+  headerColor?: string;
+  buttonColor?: string;
+  badgeBg?: string;
   submenus: SubMenuConfig[];
 }
+
 
 export type SSTRecordStatus = 'BORRADOR' | 'PENDIENTE' | 'EN_PROCESO' | 'CERRADO';
 

@@ -11,11 +11,17 @@ import {
   Plus,
   RefreshCw,
   GitBranch,
+  FolderOpen,
+  ExternalLink,
+  FileSpreadsheet,
+  CheckCircle2,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { isFirebaseConfigured } from '../../config/firebase';
 import { ROLES, INITIAL_SEDES } from '../../config/constants';
 import { Role } from '../../types';
+import { googleDriveService, TARGET_DRIVE_FOLDER } from '../../services/googleDriveService';
 
 interface SystemUser {
   id: string;
@@ -59,7 +65,9 @@ const INITIAL_USERS: SystemUser[] = [
 export const SettingsView: React.FC = () => {
   const { user, login } = useAuth();
   const [usersList, setUsersList] = useState<SystemUser[]>(INITIAL_USERS);
-  const [activeTab, setActiveTab] = useState<'users' | 'firebase' | 'deployment'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'firebase' | 'deployment' | 'google_drive'>('users');
+  const [isDriveSyncing, setIsDriveSyncing] = useState(false);
+  const [driveSyncResult, setDriveSyncResult] = useState<any>(null);
 
   // Add User State
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -85,7 +93,7 @@ export const SettingsView: React.FC = () => {
   };
 
   const handleSwitchToUser = (u: SystemUser) => {
-    login(u.email, u.role, u.siteId, u.name);
+    login(u.email);
   };
 
   return (
@@ -131,6 +139,18 @@ export const SettingsView: React.FC = () => {
         >
           <Server className="h-4 w-4 text-blue-600" />
           <span>Conexión Firebase & Variables</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('google_drive')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all ${
+            activeTab === 'google_drive'
+              ? 'bg-[#0A2958] text-white shadow-sm'
+              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4 text-amber-600" />
+          <span>Google Drive (App_SST MG.V2)</span>
         </button>
 
         <button
@@ -312,6 +332,128 @@ git push -u origin main`}
                 <li>Haz clic en <strong>Deploy</strong>.</li>
               </ol>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: GOOGLE DRIVE CONNECTION */}
+      {activeTab === 'google_drive' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  Google Drive & Sheets API
+                </span>
+                <h3 className="text-lg font-black text-[#0A2958] mt-1.5 flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5 text-amber-600" />
+                  Conexión con Carpeta: {TARGET_DRIVE_FOLDER.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Sincronización automatizada de usuarios desde el archivo <strong>{TARGET_DRIVE_FOLDER.targetFileName}</strong> (hoja <em>Usuario</em>).
+                </p>
+              </div>
+
+              <a
+                href={TARGET_DRIVE_FOLDER.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors border border-slate-200"
+              >
+                <span>Abrir en Google Drive</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">ID de la Carpeta:</span>
+                <span className="font-mono font-bold text-slate-800">{TARGET_DRIVE_FOLDER.id}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Archivo Objetivo:</span>
+                <span className="font-bold text-[#0A2958] flex items-center gap-1">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  {TARGET_DRIVE_FOLDER.targetFileName}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Hoja Específica:</span>
+                <span className="font-mono font-bold text-slate-800">Usuario / Usuarios</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsDriveSyncing(true);
+                  setDriveSyncResult(null);
+                  try {
+                    const res = await googleDriveService.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id);
+                    setDriveSyncResult(res);
+                  } catch (e: any) {
+                    setDriveSyncResult({ success: false, message: e.message });
+                  } finally {
+                    setIsDriveSyncing(false);
+                  }
+                }}
+                disabled={isDriveSyncing}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A2958] hover:bg-[#123e80] text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isDriveSyncing ? 'animate-spin' : ''}`} />
+                <span>{isDriveSyncing ? 'Sincronizando con Google Drive...' : 'Sincronizar Usuarios de la Hoja Usuario Ahora'}</span>
+              </button>
+
+              <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-300 cursor-pointer">
+                <Upload className="w-4 h-4 text-slate-600" />
+                <span>Cargar Archivo Excel (.xlsx)</span>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsDriveSyncing(true);
+                    setDriveSyncResult(null);
+                    try {
+                      const res = await googleDriveService.syncUsersFromExcelFile(file);
+                      setDriveSyncResult(res);
+                    } catch (err: any) {
+                      setDriveSyncResult({ success: false, message: err.message });
+                    } finally {
+                      setIsDriveSyncing(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
+            {driveSyncResult && (
+              <div
+                className={`p-4 rounded-xl border text-xs space-y-1 animate-in fade-in ${
+                  driveSyncResult.success
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-red-50 border-red-200 text-red-900'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  {driveSyncResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  )}
+                  <span>{driveSyncResult.message}</span>
+                </div>
+                {driveSyncResult.users && driveSyncResult.users.length > 0 && (
+                  <p className="text-[11px] opacity-80 pt-1">
+                    Se han actualizado {driveSyncResult.users.length} usuarios en la plataforma.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

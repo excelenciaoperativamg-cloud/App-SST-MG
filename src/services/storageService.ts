@@ -8,6 +8,7 @@ import {
   MasterImportHistory,
   AuditLog,
 } from '../types';
+import { EPPDeliveryRecord } from '../types/epp';
 import {
   INITIAL_SEDES,
   INITIAL_SUPERVISORES,
@@ -20,6 +21,7 @@ import { auditService } from './auditService';
 const KEYS = {
   PERSONNEL: 'mg_sst_personnel_master',
   RECORDS: 'mg_sst_records',
+  EPP_DELIVERIES: 'mg_sst_epp_deliveries',
   SEDES: 'mg_sst_sedes',
   SUPERVISORES: 'mg_sst_supervisores',
   EPS: 'mg_sst_eps',
@@ -234,6 +236,153 @@ const SEED_RECORDS: SSTRecord[] = [
   },
 ];
 
+const SEED_EPP_DELIVERIES: EPPDeliveryRecord[] = [
+  {
+    id: 'epp-rec-001',
+    numeroActa: 'EPP-MG-2026-001',
+    fecha: '2026-03-01',
+    sedeId: 'MG-MG',
+    area: 'Mantenimiento',
+    supervisor: 'Andrés Felipe Gómez',
+    cedulaTrabajador: '1017123456',
+    nombreTrabajador: 'Mateo Arango Jaramillo',
+    puestoTrabajador: 'Técnico de Mantenimiento',
+    motivo: 'DOTACION_PERIODICA',
+    items: [
+      {
+        itemId: 'epp-casco',
+        categoria: 'CABEZA_ROSTRO',
+        nombre: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
+        cantidad: 1,
+        talla: 'Ajustable',
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-gafas-claras',
+        categoria: 'VISUAL',
+        nombre: 'Gafas de Seguridad Transparentes Antirrayadura',
+        cantidad: 1,
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-guantes-vaqueta',
+        categoria: 'MANOS',
+        nombre: 'Guantes de Vaqueta Tipo Ingeniero',
+        cantidad: 2,
+        talla: '9 (L)',
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-botas-cuero',
+        categoria: 'PIES',
+        nombre: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
+        cantidad: 1,
+        talla: '41',
+        estado: 'NUEVO',
+      },
+    ],
+    observaciones: 'Entrega de dotación correspondiente al primer cuatrimestre del año. Elementos revisados a satisfacción.',
+    compromisoAceptado: true,
+    responsableEntrega: 'Supervisor SST Medellín',
+    responsableEmail: 'mg@mgconsultores.com',
+    estado: 'ENTREGADO_FIRMADO',
+    createdAt: '2026-03-01T09:00:00.000Z',
+    updatedAt: '2026-03-01T09:15:00.000Z',
+    createdBy: 'mg@mgconsultores.com',
+  },
+  {
+    id: 'epp-rec-002',
+    numeroActa: 'EPP-HA-2026-002',
+    fecha: '2026-03-05',
+    sedeId: 'MG-HA',
+    area: 'Producción',
+    supervisor: 'María Eugenia Salazar',
+    cedulaTrabajador: '1020456789',
+    nombreTrabajador: 'Laura Camila Restrepo Morales',
+    puestoTrabajador: 'Operadora de Planta',
+    motivo: 'DOTACION_PERIODICA',
+    items: [
+      {
+        itemId: 'epp-casco',
+        categoria: 'CABEZA_ROSTRO',
+        nombre: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
+        cantidad: 1,
+        talla: 'Ajustable',
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-guantes-nitrilo',
+        categoria: 'MANOS',
+        nombre: 'Guantes de Nitrilo Verde Calibre 15',
+        cantidad: 3,
+        talla: '8',
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-protectores-insercion',
+        categoria: 'AUDITIVA',
+        nombre: 'Protectores Auditivos Tipo Inserción con Cordón',
+        cantidad: 2,
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-botas-cuero',
+        categoria: 'PIES',
+        nombre: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
+        cantidad: 1,
+        talla: '38',
+        estado: 'NUEVO',
+      },
+    ],
+    observaciones: 'Entrega regular a trabajadora operativa en planta.',
+    compromisoAceptado: true,
+    responsableEntrega: 'Supervisor SST Hacienda',
+    responsableEmail: 'ha@mgconsultores.com',
+    estado: 'ENTREGADO_FIRMADO',
+    createdAt: '2026-03-05T10:00:00.000Z',
+    updatedAt: '2026-03-05T10:20:00.000Z',
+    createdBy: 'ha@mgconsultores.com',
+  },
+  {
+    id: 'epp-rec-003',
+    numeroActa: 'EPP-SC-2026-003',
+    fecha: '2026-03-12',
+    sedeId: 'MG-SC',
+    area: 'Almacén',
+    supervisor: 'Guillermo León Vélez',
+    cedulaTrabajador: '1035678901',
+    nombreTrabajador: 'Juan Pablo Zapata Ochoa',
+    puestoTrabajador: 'Coordinador de Almacén',
+    motivo: 'REPOSICION_DESGASTE',
+    items: [
+      {
+        itemId: 'epp-guantes-anticorte',
+        categoria: 'MANOS',
+        nombre: 'Guantes de Tejido HPPE Anticorte Nivel 5',
+        cantidad: 2,
+        talla: '9 (L)',
+        estado: 'NUEVO',
+      },
+      {
+        itemId: 'epp-chaleco-reflectivo',
+        categoria: 'CORPORAL_ALTURAS',
+        nombre: 'Chaleco de Alta Visibilidad con Cintas Reflectivas',
+        cantidad: 1,
+        talla: 'L',
+        estado: 'NUEVO',
+      },
+    ],
+    observaciones: 'Reposición por desgaste normal de guantes en manejo de estibas.',
+    compromisoAceptado: true,
+    responsableEntrega: 'Supervisor SST Santa Cruz',
+    responsableEmail: 'sc@mgconsultores.com',
+    estado: 'ENTREGADO_FIRMADO',
+    createdAt: '2026-03-12T14:30:00.000Z',
+    updatedAt: '2026-03-12T14:45:00.000Z',
+    createdBy: 'sc@mgconsultores.com',
+  },
+];
+
 export const storageService = {
   // Initialize storage with seeds if empty
   init() {
@@ -254,6 +403,9 @@ export const storageService = {
     }
     if (!localStorage.getItem(KEYS.RECORDS)) {
       localStorage.setItem(KEYS.RECORDS, JSON.stringify(SEED_RECORDS));
+    }
+    if (!localStorage.getItem(KEYS.EPP_DELIVERIES)) {
+      localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(SEED_EPP_DELIVERIES));
     }
   },
 
@@ -493,6 +645,109 @@ export const storageService = {
     return true;
   },
 
+  // ---------------- EPP DELIVERIES ----------------
+  getEPPDeliveries(filters?: {
+    sedeId?: string;
+    estado?: string;
+    search?: string;
+    cedulaTrabajador?: string;
+  }): EPPDeliveryRecord[] {
+    let list: EPPDeliveryRecord[];
+    try {
+      const stored = localStorage.getItem(KEYS.EPP_DELIVERIES);
+      list = stored ? JSON.parse(stored) : SEED_EPP_DELIVERIES;
+    } catch {
+      list = SEED_EPP_DELIVERIES;
+    }
+
+    if (!filters) return list;
+
+    return list.filter((item) => {
+      if (filters.sedeId && filters.sedeId !== 'TODAS' && item.sedeId !== filters.sedeId) return false;
+      if (filters.estado && filters.estado !== 'TODOS' && item.estado !== filters.estado) return false;
+      if (filters.cedulaTrabajador && item.cedulaTrabajador !== filters.cedulaTrabajador) return false;
+      if (filters.search) {
+        const query = filters.search.toLowerCase();
+        const matches =
+          item.numeroActa.toLowerCase().includes(query) ||
+          item.nombreTrabajador.toLowerCase().includes(query) ||
+          item.cedulaTrabajador.toLowerCase().includes(query) ||
+          item.area.toLowerCase().includes(query) ||
+          item.supervisor.toLowerCase().includes(query) ||
+          item.items.some((i) => i.nombre.toLowerCase().includes(query));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  },
+
+  getEPPDeliveryById(id: string): EPPDeliveryRecord | undefined {
+    const list = this.getEPPDeliveries();
+    return list.find((d) => d.id === id);
+  },
+
+  saveEPPDelivery(delivery: EPPDeliveryRecord, auditUser: { email: string; name: string }): EPPDeliveryRecord {
+    const list = this.getEPPDeliveries();
+    const index = list.findIndex((d) => d.id === delivery.id);
+    let updated: EPPDeliveryRecord[];
+    const isNew = index === -1;
+
+    if (isNew) {
+      updated = [delivery, ...list];
+      auditService.log(
+        auditUser.email,
+        auditUser.name,
+        'CREAR',
+        "Entrega EPP's",
+        delivery.numeroActa,
+        `Acta de Entrega de EPP ${delivery.numeroActa} registrada para ${delivery.nombreTrabajador} en sede ${delivery.sedeId} con ${delivery.items.length} elementos`,
+        undefined,
+        delivery
+      );
+    } else {
+      const prev = list[index];
+      updated = [...list];
+      updated[index] = { ...delivery, updatedAt: new Date().toISOString() };
+      auditService.log(
+        auditUser.email,
+        auditUser.name,
+        'EDITAR',
+        "Entrega EPP's",
+        delivery.numeroActa,
+        `Actualización de Acta de Entrega de EPP ${delivery.numeroActa} para ${delivery.nombreTrabajador}`,
+        prev,
+        delivery
+      );
+    }
+
+    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
+    this.notify();
+    return isNew ? delivery : updated[index];
+  },
+
+  deleteEPPDelivery(id: string, auditUser: { email: string; name: string }): boolean {
+    const list = this.getEPPDeliveries();
+    const target = list.find((d) => d.id === id);
+    if (!target) return false;
+
+    const updated = list.filter((d) => d.id !== id);
+    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
+
+    auditService.log(
+      auditUser.email,
+      auditUser.name,
+      'EDITAR',
+      "Entrega EPP's",
+      target.numeroActa,
+      `Eliminación del acta de Entrega de EPP ${target.numeroActa} del trabajador ${target.nombreTrabajador}`,
+      target,
+      undefined
+    );
+
+    this.notify();
+    return true;
+  },
+
   // ---------------- CATALOGS ----------------
   getSedes(): Sede[] {
     try {
@@ -605,6 +860,7 @@ export const storageService = {
       arl: this.getARL(),
       personnel: this.getWorkers(),
       records: this.getRecords(),
+      eppDeliveries: this.getEPPDeliveries(),
       importHistory: this.getImportHistory(),
       auditLogs: auditService.getLogs(),
     };
@@ -633,6 +889,7 @@ export const storageService = {
       if (Array.isArray(backupData.arl)) localStorage.setItem(KEYS.ARL, JSON.stringify(backupData.arl));
       if (Array.isArray(backupData.personnel)) localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(backupData.personnel));
       if (Array.isArray(backupData.records)) localStorage.setItem(KEYS.RECORDS, JSON.stringify(backupData.records));
+      if (Array.isArray(backupData.eppDeliveries)) localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(backupData.eppDeliveries));
       if (Array.isArray(backupData.importHistory)) localStorage.setItem(KEYS.IMPORT_HISTORY, JSON.stringify(backupData.importHistory));
 
       auditService.log(

@@ -15,7 +15,9 @@ import {
 import { useSST } from '../../context/SSTContext';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_SEDES, SST_MODULES } from '../../config/constants';
-import { SSTRecord } from '../../types';
+import { SSTRecord, MenuModuleConfig } from '../../types';
+import { ModuleCard } from '../common/ModuleCard';
+import { SubmenuPickerModal } from '../common/SubmenuPickerModal';
 
 interface DashboardViewProps {
   onNavigateToModule: (moduleId: string, subMenuId?: string) => void;
@@ -32,6 +34,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const { workers, records, stats } = useSST();
   const { user, canEdit } = useAuth();
+  const [selectedPickerModule, setSelectedPickerModule] = useState<MenuModuleConfig | null>(null);
 
   // Filters
   const [selectedSede, setSelectedSede] = useState<string>('TODAS');
@@ -326,92 +329,101 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Sede Indicators & Module Distribution */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Sede Indicators */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-bold text-[#0A2958] flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-[#E60000]" />
-                Registros y Actividad por Sede
-              </h2>
-              <p className="text-xs text-slate-500">Distribución de registros en las 5 sedes operativas</p>
-            </div>
+      {/* 8 Official SST Modules in requested card style */}
+      <section aria-labelledby="modulos-sst-heading" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 id="modulos-sst-heading" className="text-lg font-black text-[#0A2958] flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-[#E60000]" />
+              Módulos Operacionales de Seguridad y Salud en el Trabajo
+            </h2>
+            <p className="text-xs text-slate-500">
+              Selecciona el proceso para gestionar inspecciones, registros y formatos SST
+            </p>
           </div>
+          <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+            8 Módulos Oficiales
+          </span>
+        </div>
 
-          <div className="space-y-4">
-            {INITIAL_SEDES.map((sede) => {
-              const count = records.filter((r) => r.sedeId === sede.id).length;
-              const pendingCount = records.filter((r) => r.sedeId === sede.id && r.estado === 'PENDIENTE').length;
-              const maxRecords = Math.max(...INITIAL_SEDES.map((s) => records.filter((r) => r.sedeId === s.id).length), 1);
-              const percentage = Math.round((count / maxRecords) * 100);
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {SST_MODULES.map((m) => {
+            const recordsCount = records.filter((r) => r.menuId === m.id).length;
+            return (
+              <ModuleCard
+                key={m.id}
+                module={m}
+                recordsCount={recordsCount}
+                onAccess={(modId, subId) => onNavigateToModule(modId, subId)}
+                onOpenSubmenuPicker={(mod) => setSelectedPickerModule(mod)}
+              />
+            );
+          })}
+        </div>
+      </section>
 
-              return (
-                <div key={sede.id} className="rounded-lg border border-slate-100 p-3 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-[#0A2958] bg-slate-100 px-2 py-0.5 rounded">
-                        {sede.codigo}
-                      </span>
-                      <span className="font-semibold text-slate-700">{sede.nombre}</span>
-                      <span className="text-[11px] text-slate-600">({sede.ciudad})</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {pendingCount > 0 && (
-                        <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.2 rounded border border-red-200">
-                          {pendingCount} pendientes
-                        </span>
-                      )}
-                      <span className="font-bold text-slate-800">{count} registros</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#0A2958] to-[#E60000] transition-all duration-500"
-                      style={{ width: `${Math.max(percentage, 5)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+      {/* Sede Indicators */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-[#0A2958] flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-[#E60000]" />
+              Registros y Actividad por Sede
+            </h2>
+            <p className="text-xs text-slate-500">Distribución de registros en las 5 sedes operativas de MG Consultores</p>
           </div>
         </div>
 
-        {/* Quick Module Summary */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-          <h2 className="text-base font-bold text-[#0A2958] mb-1">
-            Módulos del Sistema SST
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">Acceso rápido a los 8 módulos oficiales</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {INITIAL_SEDES.map((sede) => {
+            const count = records.filter((r) => r.sedeId === sede.id).length;
+            const pendingCount = records.filter((r) => r.sedeId === sede.id && r.estado === 'PENDIENTE').length;
+            const maxRecords = Math.max(...INITIAL_SEDES.map((s) => records.filter((r) => r.sedeId === s.id).length), 1);
+            const percentage = Math.round((count / maxRecords) * 100);
 
-          <div className="space-y-2">
-            {SST_MODULES.map((m) => {
-              const count = records.filter((r) => r.menuId === m.id).length;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => onNavigateToModule(m.id, m.submenus[0]?.id)}
-                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-2 text-xs font-semibold text-slate-700 hover:border-[#0A2958]/30 hover:bg-slate-50 transition-all text-left group"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="h-2 w-2 rounded-full bg-[#E60000]" />
-                    <span className="truncate group-hover:text-[#0A2958]">{m.nombre}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                      {count}
+            return (
+              <div key={sede.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#0A2958] bg-white border border-slate-200 px-2 py-0.5 rounded">
+                      {sede.codigo}
                     </span>
-                    <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-[#0A2958] transition-transform group-hover:translate-x-0.5" />
+                    <span className="font-semibold text-slate-700">{sede.nombre}</span>
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                  <span className="font-bold text-slate-800">{count} reg.</span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
+                  <span>{sede.ciudad}</span>
+                  {pendingCount > 0 ? (
+                    <span className="font-bold text-red-600 bg-red-50 px-1.5 py-0.2 rounded border border-red-200">
+                      {pendingCount} pend.
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 font-semibold">Al día</span>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#0A2958] to-[#E60000] transition-all duration-500"
+                    style={{ width: `${Math.max(percentage, 5)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Submenu Picker Modal */}
+      <SubmenuPickerModal
+        module={selectedPickerModule}
+        isOpen={Boolean(selectedPickerModule)}
+        onClose={() => setSelectedPickerModule(null)}
+        onSelectSubmenu={(modId, subId) => onNavigateToModule(modId, subId)}
+      />
 
       {/* Recent SST Records Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
