@@ -277,10 +277,87 @@ export const exportService = {
 
   /**
    * Generates official Acta de Entrega de EPP (PDF)
+  /**
+   * Exporta la Hoja Oficial "Entrega Epp´s MG" a Excel (.xlsx) con los 19 campos exactos
    */
-  generateEPPDeliveryPDF(delivery: import('../types/epp').EPPDeliveryRecord) {
+  exportEntregaEPPMGToExcel(records: import('../types/epp').EntregaEPPMGRecord[], fileName = 'Entrega_Epps_MG') {
+    const formattedData = records.map((r) => ({
+      'Id_Epp': r.Id_Epp,
+      'Fecha': r.Fecha,
+      'Año': r.Año,
+      'Mes': r.Mes,
+      'Sede': r.Sede,
+      'Cédula': r.Cédula,
+      'Nombre': r.Nombre,
+      'Labor': r.Labor,
+      'Area': r.Area,
+      'Supervisor': r.Supervisor,
+      'Código Epp': r.Código_Epp,
+      'Epp': r.Epp,
+      'Tipo_Entrega': r.Tipo_Entrega,
+      'Costo': r.Costo,
+      'Estado': r.Estado,
+      'Foto_Entrega': r.Foto_Entrega ? 'Foto Adjunta' : 'Sin Foto',
+      'Firma_Trabajador': r.Firma_Trabajador ? 'Firmado Digitalmente' : 'Pendiente',
+      'Responsable SST': r.Responsable_SST,
+      'Firma SST': r.Firma_SST ? 'Firmado Digitalmente' : 'Pendiente',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedData);
+    const workbook = XLSX.utils.book_new();
+    // Nombre de la hoja requerido: "Entrega Epp´s MG"
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Entrega Epp´s MG');
+
+    // Auto-fit column widths
+    worksheet['!cols'] = [
+      { wch: 16 }, // Id_Epp
+      { wch: 12 }, // Fecha
+      { wch: 8 },  // Año
+      { wch: 12 }, // Mes
+      { wch: 10 }, // Sede
+      { wch: 14 }, // Cédula
+      { wch: 28 }, // Nombre
+      { wch: 22 }, // Labor
+      { wch: 18 }, // Area
+      { wch: 24 }, // Supervisor
+      { wch: 14 }, // Código Epp
+      { wch: 38 }, // Epp
+      { wch: 22 }, // Tipo_Entrega
+      { wch: 14 }, // Costo
+      { wch: 20 }, // Estado
+      { wch: 16 }, // Foto_Entrega
+      { wch: 20 }, // Firma_Trabajador
+      { wch: 28 }, // Responsable SST
+      { wch: 20 }, // Firma SST
+    ];
+
+    XLSX.writeFile(workbook, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  },
+
+  /**
+   * Generates official Acta de Entrega de EPP (PDF) con los 19 campos y firmas digitales
+   */
+  generateEPPDeliveryPDF(delivery: any) {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Data normalization
+    const idActa = delivery.Id_Epp || delivery.numeroActa || 'EPP-001';
+    const fecha = delivery.Fecha || delivery.fecha || new Date().toISOString().split('T')[0];
+    const anio = delivery.Año || new Date(fecha).getFullYear();
+    const mes = delivery.Mes || 'Marzo';
+    const sede = delivery.Sede || delivery.sedeId || 'MG-MG';
+    const cedula = delivery.Cédula || delivery.cedulaTrabajador || 'N/A';
+    const nombre = delivery.Nombre || delivery.nombreTrabajador || 'N/A';
+    const labor = delivery.Labor || delivery.puestoTrabajador || 'N/A';
+    const area = delivery.Area || delivery.area || 'Operaciones';
+    const supervisor = delivery.Supervisor || delivery.supervisor || 'N/A';
+    const codigoEpp = delivery.Código_Epp || delivery.codigoEpp || 'EPP-001';
+    const eppNombre = delivery.Epp || delivery.epp || 'Elemento EPP';
+    const tipoEntrega = delivery.Tipo_Entrega || delivery.motivo || 'Dotación Periódica';
+    const costo = delivery.Costo || 0;
+    const estado = delivery.Estado || delivery.estado || 'Entregado y Firmado';
+    const responsableSST = delivery.Responsable_SST || delivery.responsableEntrega || 'Responsable SST';
 
     // Top Header Banner
     doc.setFillColor(10, 41, 88); // #0A2958
@@ -293,34 +370,35 @@ export const exportService = {
     // Header Text
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
+    doc.setFontSize(14);
     doc.text('MG CONSULTORES S.A.S.', 14, 13);
 
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text('SISTEMA DE GESTIÓN DE SEGURIDAD Y SALUD EN EL TRABAJO (SG-SST)', 14, 19);
-    doc.text('FORMATO OFICIAL: REGISTRO DE ENTREGA Y REPOSICIÓN DE EPP', 14, 25);
+    doc.text('HOJA Y FORMULARIO OFICIAL: ENTREGA EPP´S MG', 14, 25);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`ACTA N°: ${delivery.numeroActa}`, pageWidth - 14, 16, { align: 'right' });
+    doc.text(`ID EPP: ${idActa}`, pageWidth - 14, 16, { align: 'right' });
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Sede: ${delivery.sedeId}`, pageWidth - 14, 23, { align: 'right' });
+    doc.text(`Sede: ${sede} | Periodo: ${mes} ${anio}`, pageWidth - 14, 23, { align: 'right' });
 
     // Title Section
     doc.setTextColor(10, 41, 88);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('ACTA DE ENTREGA DE ELEMENTOS DE PROTECCIÓN PERSONAL (EPP)', 14, 38);
+    doc.text('ACTA OFICIAL DE ENTREGA DE ELEMENTOS DE PROTECCIÓN PERSONAL', 14, 38);
 
-    // Meta Information Table
+    // Meta Information Table (19 Campos)
     const metaData = [
-      ['Fecha de Entrega:', delivery.fecha, 'Estado Acta:', delivery.estado.replace('_', ' ')],
-      ['Trabajador Receptor:', delivery.nombreTrabajador, 'Cédula / ID:', delivery.cedulaTrabajador],
-      ['Puesto / Cargo:', delivery.puestoTrabajador, 'Área / Sección:', delivery.area],
-      ['Sede Operativa:', delivery.sedeId, 'Motivo de Entrega:', delivery.motivo.replace('_', ' ')],
-      ['Responsable SST:', delivery.responsableEntrega, 'Supervisor Área:', delivery.supervisor || 'N/A'],
+      ['Id_Epp:', idActa, 'Fecha / Periodo:', `${fecha} (${mes} ${anio})`],
+      ['Sede Operativa:', sede, 'Estado de Registro:', estado],
+      ['Trabajador Receptor:', nombre, 'Cédula de Ciudadanía:', `C.C. ${cedula}`],
+      ['Labor / Puesto:', labor, 'Área / Sección:', area],
+      ['Supervisor a Cargo:', supervisor, 'Tipo de Entrega:', tipoEntrega],
+      ['Responsable SST:', responsableSST, 'Costo EPP (Hoja Epp´s):', `$ ${Number(costo).toLocaleString('es-CO')} COP`],
     ];
 
     autoTable(doc, {
@@ -342,31 +420,26 @@ export const exportService = {
     doc.setFontSize(10);
     doc.setTextColor(10, 41, 88);
     doc.setFont('helvetica', 'bold');
-    doc.text('1. Elementos de Protección Personal Suministrados', 14, currentY);
+    doc.text('1. Detalle del Elemento Suministrado (Hoja Epp´s)', 14, currentY);
 
-    const itemsRows = delivery.items.map((it, idx) => [
-      String(idx + 1),
-      it.categoria.replace('_', ' / '),
-      it.nombre,
-      String(it.cantidad),
-      it.talla || 'Estándar',
-      it.estado,
-    ]);
+    const itemsRows = [
+      ['1', codigoEpp, eppNombre, tipoEntrega, `$ ${Number(costo).toLocaleString('es-CO')}`, estado],
+    ];
 
     autoTable(doc, {
       startY: currentY + 3,
-      head: [['#', 'Categoría', 'Descripción del Elemento', 'Cant.', 'Talla', 'Estado']],
+      head: [['#', 'Código Epp', 'Descripción EPP', 'Tipo Entrega', 'Costo Unit.', 'Estado']],
       body: itemsRows,
       theme: 'grid',
       headStyles: { fillColor: [10, 41, 88], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 2.5 },
+      styles: { fontSize: 8, cellPadding: 2.8 },
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 35, fontStyle: 'bold', textColor: [10, 41, 88] },
-        2: { cellWidth: 85 },
-        3: { cellWidth: 15, halign: 'center' },
-        4: { cellWidth: 20, halign: 'center' },
-        5: { cellWidth: 25, halign: 'center' },
+        1: { cellWidth: 30, fontStyle: 'bold', textColor: [10, 41, 88] },
+        2: { cellWidth: 80 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 22, halign: 'right', fontStyle: 'bold', textColor: [16, 120, 60] },
+        5: { cellWidth: 18, halign: 'center' },
       },
     });
 
@@ -377,7 +450,7 @@ export const exportService = {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(10, 41, 88);
-      doc.text('2. Observaciones Adicionales', 14, currentY);
+      doc.text('2. Observaciones de Entrega', 14, currentY);
       autoTable(doc, {
         startY: currentY + 2,
         body: [[delivery.observaciones]],
@@ -394,7 +467,7 @@ export const exportService = {
     doc.text('3. Declaración de Recepción y Compromiso del Trabajador', 14, currentY);
 
     const legalText =
-      'Declaro haber recibido en perfecto estado de funcionamiento y asepsia los Elementos de Protección Personal (EPP) detallados en la presente acta. Manifiesto que recibí capacitación sobre su adecuado uso, inspección rutinaria, limpieza y almacenamiento. Me comprometo a utilizarlos de manera obligatoria durante toda la jornada laboral y a reportar inmediatamente a SST cualquier anomalía o desgaste para su respectivo reemplazo (Resolución 2400 de 1979 y Decreto 1072 de 2015).';
+      'Certifico haber recibido en perfecto estado de funcionamiento, calidad y asepsia el Elemento de Protección Personal (EPP) relacionado en este registro. Recibí instrucción técnica sobre su correcto uso, inspección rutinaria, limpieza y reposición en MG Consultores S.A.S. Asumo el compromiso legal de utilizarlo de forma permanente y obligatoria en el desempeño de mis labores (Res. 2400/1979 y Dec. 1072/2015).';
 
     autoTable(doc, {
       startY: currentY + 2,
@@ -403,16 +476,30 @@ export const exportService = {
       styles: { fontSize: 7.5, cellPadding: 3, textColor: [71, 85, 105], fontStyle: 'italic' },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 4;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // Check space for signatures
-    if (doc.internal.pageSize.getHeight() - currentY < 40) {
+    if (doc.internal.pageSize.getHeight() - currentY < 45) {
       doc.addPage();
       currentY = 20;
     }
 
-    // Signatures
-    const sigY = currentY + 22;
+    // Embed Digital Signatures if available
+    const sigY = currentY + 26;
+
+    // Worker Signature Image
+    if (delivery.Firma_Trabajador && delivery.Firma_Trabajador.startsWith('data:image')) {
+      try {
+        doc.addImage(delivery.Firma_Trabajador, 'PNG', 115, sigY - 20, 50, 18);
+      } catch (e) {}
+    }
+
+    // SST Signature Image
+    if (delivery.Firma_SST && delivery.Firma_SST.startsWith('data:image')) {
+      try {
+        doc.addImage(delivery.Firma_SST, 'PNG', 20, sigY - 20, 50, 18);
+      } catch (e) {}
+    }
 
     // Signature 1: Responsable SST
     doc.setDrawColor(148, 163, 184);
@@ -420,33 +507,33 @@ export const exportService = {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(delivery.responsableEntrega || 'Responsable SST', 14, sigY + 4);
+    doc.text(responsableSST, 14, sigY + 4);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('Entregado por: Líder / Responsable SST', 14, sigY + 8);
+    doc.text('Entregado por: Responsable SST MG Consultores', 14, sigY + 8);
 
     // Signature 2: Trabajador Receptor
     doc.line(110, sigY, 196, sigY);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(delivery.nombreTrabajador, 110, sigY + 4);
+    doc.text(nombre, 110, sigY + 4);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Recibido conforme - C.C. ${delivery.cedulaTrabajador}`, 110, sigY + 8);
+    doc.text(`Recibido conforme - C.C. ${cedula}`, 110, sigY + 8);
 
     // Footer
     const footerY = doc.internal.pageSize.getHeight() - 8;
     doc.setFontSize(7);
     doc.setTextColor(148, 163, 184);
     doc.text(
-      'MG Consultores S.A.S. | Registro Oficial de Dotación y EPP | Sistema de Gestión de Seguridad y Salud en el Trabajo',
+      'MG Consultores S.A.S. | Hoja Oficial Entrega Epp´s MG | Cumplimiento SG-SST',
       pageWidth / 2,
       footerY,
       { align: 'center' }
     );
 
-    doc.save(`Acta_Entrega_EPP_${delivery.numeroActa}.pdf`);
+    doc.save(`Entrega_EPP_${idActa}.pdf`);
   },
 };
 

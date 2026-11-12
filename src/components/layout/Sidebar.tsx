@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Shield className="h-4 w-4 text-emerald-300 flex-shrink-0" />
                   <div className="text-left">
                     <div className="leading-tight">Personal</div>
-                    <div className="text-[11px] opacity-90 font-normal">Entrega EPP's</div>
+                    <div className="text-[11px] opacity-90 font-normal">Entrega Epp´s MG</div>
                   </div>
                 </div>
                 <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">

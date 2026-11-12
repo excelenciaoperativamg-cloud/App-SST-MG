@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AppUser, INITIAL_APP_USERS } from '../config/users';
 import { Role } from '../types';
+import { EntregaEPPMGRecord } from '../types/epp';
 import { auditService } from './auditService';
 
 // Initialize Firebase App safely (singleton)
@@ -19,7 +20,7 @@ const auth = getAuth(app);
 // Provider with Drive and Sheets scopes
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.readonly');
-provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 provider.setCustomParameters({
   prompt: 'select_account',
 });
@@ -30,6 +31,14 @@ export const TARGET_DRIVE_FOLDER = {
   name: 'App_SST MG.V2',
   url: 'https://drive.google.com/drive/folders/1LrtkMgzlxsTz9j_jX-bIATPK5CmF0DV7',
   targetFileName: 'App_SST MG',
+};
+
+// Target Spreadsheet for Entrega Epp´s MG requested by user
+export const TARGET_ENTREGA_EPP_SPREADSHEET = {
+  id: '1LWD6Bg6wHavMlPBa_AlwOfxDPS2FZMSo2J4Dbcbbx9k',
+  name: 'Entrega Epp´s MG',
+  sheetName: 'Entrega Epp´s',
+  url: 'https://docs.google.com/spreadsheets/d/1LWD6Bg6wHavMlPBa_AlwOfxDPS2FZMSo2J4Dbcbbx9k/edit?gid=1735670822#gid=1735670822',
 };
 
 // In-memory token cache (do NOT store in localStorage)
@@ -535,6 +544,227 @@ export const googleDriveService = {
 
     // Dispatch global event so AuthContext and other components refresh instantly
     window.dispatchEvent(new CustomEvent('mg-sst-users-updated', { detail: finalUsers }));
+  },
+
+  /**
+   * Append a new delivery record to Google Sheets in Drive: "Entrega Epp´s MG" -> "Entrega Epp´s"
+   */
+  async appendEntregaEPPRecord(record: EntregaEPPMGRecord): Promise<{
+    success: boolean;
+    message: string;
+    sheetName?: string;
+    updatedRange?: string;
+  }> {
+    if (!cachedAccessToken) {
+      return {
+        success: false,
+        message: 'No hay sesión activa con Google Drive. El registro se guardó localmente y se sincronizará cuando inicies sesión en Google.',
+      };
+    }
+
+    try {
+      // Format row matching the exact 19 columns of sheet "Entrega Epp´s"
+      // Col A: Id_Epp
+      // Col B: Fecha (DD/MM/YYYY format)
+      // Col C: Año (e.g. 2026)
+      // Col D: Mes (numeric 1..12)
+      // Col E: Sede (e.g. MG-HA)
+      // Col F: Cédula (e.g. 161008)
+      // Col G: Nombre
+      // Col H: Labor
+      // Col I: Area
+      // Col J: Supervisor
+      // Col K: Código Epp
+      // Col L: Epp
+      // Col M: Tipo_Entrega
+      // Col N: Costo (numeric/currency)
+      // Col O: Estado
+      // Col P: Foto_Entrega (filename or reference)
+      // Col Q: Firma_Trabajador
+      // Col R: Responsable SST
+      // Col S: Firma SST
+      let formattedFecha = record.Fecha;
+      if (record.Fecha && record.Fecha.includes('-')) {
+        const [y, m, d] = record.Fecha.split('-');
+        formattedFecha = `${d}/${m}/${y}`;
+      }
+
+      // Generate photo reference or file label
+      let fotoRef = record.Foto_Entrega || '';
+      if (record.Foto_Entrega && record.Foto_Entrega.startsWith('data:')) {
+        fotoRef = `Entrega Epps_Images/${record.Fecha}-${record.Cédula}-${record.Nombre.replace(/\s+/g, '_').slice(0, 20)}.FOTO_ENTREGA.jpg`;
+      }
+
+      // Extract strictly the code for Col K (e.g. 7PRGUA47) without any attached description
+      const cleanCodigoEpp = (record.Código_Epp || '').split(' - ')[0].trim();
+      const cleanEpp = (record.Epp || '').trim();
+
+      const rowValues = [
+        record.Id_Epp || `EPP-${Date.now()}`,
+        formattedFecha,
+        record.Año || 2026,
+        record.Mes || 1,
+        record.Sede,
+        record.Cédula,
+        record.Nombre,
+        record.Labor,
+        record.Area,
+        record.Supervisor,
+        cleanCodigoEpp,
+        cleanEpp,
+        record.Tipo_Entrega,
+        record.Costo,
+        record.Estado || 'Entregado y Firmado',
+        fotoRef,
+        record.Firma_Trabajador ? `[Firma Digital C.C. ${record.Cédula}]` : 'Pendiente',
+        record.Responsable_SST || 'Supervisor SST MG Consultores',
+        record.Firma_SST ? `[Firma Digital SST]` : 'Pendiente',
+      ];
+
+      // Try sheet name 'Entrega Epp´s' first, then 'Entrega Epp´s MG'
+      const sheetCandidates = ['Entrega Epp´s', 'Entrega Epp´s MG', 'Hoja 1'];
+      let appendSuccess = false;
+      let lastError = '';
+      let rangeUpdated = '';
+      let successfulSheet = 'Entrega Epp´s';
+
+      for (const sheetName of sheetCandidates) {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${TARGET_ENTREGA_EPP_SPREADSHEET.id}/values/${encodeURIComponent(sheetName)}!A:S:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cachedAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            range: `${sheetName}!A:S`,
+            majorDimension: 'ROWS',
+            values: [rowValues],
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          appendSuccess = true;
+          successfulSheet = sheetName;
+          rangeUpdated = data.updates?.updatedRange || `${sheetName}!A:S`;
+          break;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastError = errData.error?.message || `HTTP ${res.status}`;
+        }
+      }
+
+      if (!appendSuccess) {
+        throw new Error(lastError || 'No se pudo guardar la fila en la hoja de Google Drive.');
+      }
+
+      // Log in audit service
+      auditService.log(
+        cachedGoogleUser?.email || 'sst@mgconsultores.com',
+        cachedGoogleUser?.displayName || 'Google Drive Sync',
+        'CREAR',
+        'Entrega Epp´s MG (Google Drive)',
+        record.Id_Epp,
+        `Registro ${record.Id_Epp} (${record.Nombre} - ${record.Epp}) sincronizado en Google Drive en hoja "${successfulSheet}"`
+      );
+
+      return {
+        success: true,
+        message: `Registro guardado exitosamente en el archivo de Google Drive (Hoja "${successfulSheet}").`,
+        sheetName: successfulSheet,
+        updatedRange: rangeUpdated,
+      };
+    } catch (err: any) {
+      console.warn('Error appending row to Google Sheets:', err);
+      return {
+        success: false,
+        message: `Guardado localmente. Error al escribir en Google Drive: ${err.message || 'Error de permisos o conexión'}`,
+      };
+    }
+  },
+
+  /**
+   * Sync deliveries from Google Sheets "Entrega Epp´s MG"
+   */
+  async fetchDeliveriesFromDrive(): Promise<{ success: boolean; records: EntregaEPPMGRecord[]; message: string }> {
+    if (!cachedAccessToken) {
+      return {
+        success: false,
+        records: [],
+        message: 'No hay sesión activa con Google Drive.',
+      };
+    }
+
+    try {
+      const sheetCandidates = ['Entrega Epp´s', 'Entrega Epp´s MG'];
+      let values: any[][] = [];
+      let foundSheet = '';
+
+      for (const sheetName of sheetCandidates) {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${TARGET_ENTREGA_EPP_SPREADSHEET.id}/values/${encodeURIComponent(sheetName)}!A2:S1000`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${cachedAccessToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.values && data.values.length > 0) {
+            values = data.values;
+            foundSheet = sheetName;
+            break;
+          }
+        }
+      }
+
+      if (values.length === 0) {
+        return {
+          success: false,
+          records: [],
+          message: 'No se encontraron filas de registros en la hoja de Google Drive.',
+        };
+      }
+
+      const records: EntregaEPPMGRecord[] = values.map((row, idx) => {
+        const costStr = String(row[13] || '0').replace(/[^0-9]/g, '');
+        return {
+          id: `drive-epp-${row[0] || idx}`,
+          Id_Epp: String(row[0] || `EPP-${idx}`),
+          Fecha: String(row[1] || new Date().toISOString().split('T')[0]),
+          Año: parseInt(String(row[2] || '2026'), 10),
+          Mes: row[3] || 1,
+          Sede: String(row[4] || 'MG-HA'),
+          Cédula: String(row[5] || ''),
+          Nombre: String(row[6] || ''),
+          Labor: String(row[7] || ''),
+          Area: String(row[8] || ''),
+          Supervisor: String(row[9] || ''),
+          Código_Epp: String(row[10] || ''),
+          Epp: String(row[11] || ''),
+          Tipo_Entrega: String(row[12] || 'REPOSICIÓN'),
+          Costo: parseInt(costStr, 10) || 0,
+          Estado: String(row[14] || 'Entregado y Firmado'),
+          Foto_Entrega: row[15] ? String(row[15]) : undefined,
+          Firma_Trabajador: row[16] ? String(row[16]) : undefined,
+          Responsable_SST: String(row[17] || 'Supervisor SST'),
+          Firma_SST: row[18] ? String(row[18]) : undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: 'Google Drive',
+        };
+      });
+
+      return {
+        success: true,
+        records,
+        message: `${records.length} registros obtenidos de la hoja "${foundSheet}" de Google Drive.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        message: err.message || 'Error al sincronizar con Google Drive',
+      };
+    }
   },
 
   /**

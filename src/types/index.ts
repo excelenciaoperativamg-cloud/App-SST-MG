@@ -65,6 +65,8 @@ export interface PersonnelWorker {
   sedeId: string;
   fechaIngreso: string;
   puesto: string;
+  area?: string;
+  supervisor?: string;
   eps?: string;
   arl?: string;
   estado: 'ACTIVO' | 'INACTIVO';

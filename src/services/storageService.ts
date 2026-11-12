@@ -8,7 +8,14 @@ import {
   MasterImportHistory,
   AuditLog,
 } from '../types';
-import { EPPDeliveryRecord } from '../types/epp';
+import {
+  EntregaEPPMGRecord,
+  EPPCatalogItem,
+  CATALOGO_EPPS,
+  getMesEspanol,
+  getAnioFecha,
+  EPPDeliveryRecord,
+} from '../types/epp';
 import {
   INITIAL_SEDES,
   INITIAL_SUPERVISORES,
@@ -21,7 +28,8 @@ import { auditService } from './auditService';
 const KEYS = {
   PERSONNEL: 'mg_sst_personnel_master',
   RECORDS: 'mg_sst_records',
-  EPP_DELIVERIES: 'mg_sst_epp_deliveries',
+  EPP_DELIVERIES: 'mg_sst_entrega_epp_mg_v2',
+  EPP_CATALOG: 'mg_sst_epps_catalog',
   SEDES: 'mg_sst_sedes',
   SUPERVISORES: 'mg_sst_supervisores',
   EPS: 'mg_sst_eps',
@@ -29,8 +37,585 @@ const KEYS = {
   IMPORT_HISTORY: 'mg_sst_import_history',
 };
 
-// Initial sample seed workers for demonstration and initial testing
+// Initial sample seed workers from sheet Maestro of App_SST MG
 const SEED_WORKERS: PersonnelWorker[] = [
+  {
+    id: '161008',
+    cedula: '161008',
+    nombre: 'ANGULO VEGA LUIS FERNANDO',
+    fechaNacimiento: '1990-05-14',
+    edad: 35,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-03-15',
+    puesto: 'MIPE',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-03-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '125935',
+    cedula: '125935',
+    nombre: 'MEDINA PATIÑO DANIA LINEY',
+    fechaNacimiento: '1993-08-20',
+    edad: 32,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-06-01',
+    puesto: 'CORTE - GYZ',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-06-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '743',
+    cedula: '743',
+    nombre: 'NOGUERA GETIAL MARGARITA DEL CARMEN',
+    fechaNacimiento: '1985-11-04',
+    edad: 40,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-11-10',
+    puesto: 'CORTE - GYZ',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-11-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '191447',
+    cedula: '191447',
+    nombre: 'MONTILLA CABRERA LEONARDO',
+    fechaNacimiento: '1989-02-17',
+    edad: 37,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-02-01',
+    puesto: 'RESIDUO POSCOSECHA',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-02-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '121184',
+    cedula: '121184',
+    nombre: 'AVILA CABALLERO GRISELDA',
+    fechaNacimiento: '1992-09-30',
+    edad: 33,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-08-15',
+    puesto: 'BONCHADOR',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-08-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '153491',
+    cedula: '153491',
+    nombre: 'VELASQUEZ MERCADO CRISTIAN DAVID',
+    fechaNacimiento: '1996-04-12',
+    edad: 29,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-01-15',
+    puesto: 'SURTIDO',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-01-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '131636',
+    cedula: '131636',
+    nombre: 'RAMIREZ ROMERO SEIDY WINNEHT',
+    fechaNacimiento: '1994-07-22',
+    edad: 31,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-09-01',
+    puesto: 'BONCHADOR',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-09-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '120729',
+    cedula: '120729',
+    nombre: 'BOYACA CASTILLO JENNY LORENA',
+    fechaNacimiento: '1991-10-18',
+    edad: 34,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-05-10',
+    puesto: 'BONCHADOR',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-05-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '204938',
+    cedula: '204938',
+    nombre: 'RIVAS SALAZAR WILFERDO JOSE',
+    fechaNacimiento: '1987-12-05',
+    edad: 38,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-03-20',
+    puesto: 'RESIDUO POSCOSECHA',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-03-20T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '203402',
+    cedula: '203402',
+    nombre: 'MARTINEZ MARTINEZ LUIS MANUEL',
+    fechaNacimiento: '1988-06-14',
+    edad: 37,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-02-15',
+    puesto: 'RESIDUO POSCOSECHA',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-02-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '14148',
+    cedula: '14148',
+    nombre: 'MERCADO CERPA ADRIANA MARCELA',
+    fechaNacimiento: '1993-01-15',
+    edad: 33,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-04-10',
+    puesto: 'BONCHADOR',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-04-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '204174',
+    cedula: '204174',
+    nombre: 'VASQUEZ ORTIZ ANA MILENA',
+    fechaNacimiento: '1995-03-25',
+    edad: 31,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-04-01',
+    puesto: 'BONCHADOR',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-04-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '203881',
+    cedula: '203881',
+    nombre: 'BAÑOS PONTON MARISOL',
+    fechaNacimiento: '1990-11-12',
+    edad: 35,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-03-01',
+    puesto: 'BONCHADOR',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-03-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '77478',
+    cedula: '77478',
+    nombre: 'ALVARADO COLO DIANA PAOLA',
+    fechaNacimiento: '1989-07-08',
+    edad: 36,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-01-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-01-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '113605',
+    cedula: '113605',
+    nombre: 'LARA BRICEÑO JOSE ALEXANDER',
+    fechaNacimiento: '1986-09-17',
+    edad: 39,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-08-20',
+    puesto: 'TRANSPORTADOR',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-08-20T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '3064',
+    cedula: '3064',
+    nombre: 'DELGADO LOZANO OSCAR ANTONIO',
+    fechaNacimiento: '1984-05-30',
+    edad: 41,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2018-06-15',
+    puesto: 'TRANSPORTADOR',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2018-06-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '187205',
+    cedula: '187205',
+    nombre: 'CARDENAS PALLARES YULI KATERIN',
+    fechaNacimiento: '1994-12-14',
+    edad: 31,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-04-10',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-04-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '167186',
+    cedula: '167186',
+    nombre: 'GONZALEZ GONZALEZ DANNY CAROLINA',
+    fechaNacimiento: '1992-03-08',
+    edad: 33,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-09-01',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-09-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '164304',
+    cedula: '164304',
+    nombre: 'SUAREZ ANAYA ANA CAROLINA',
+    fechaNacimiento: '1991-08-19',
+    edad: 34,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-07-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-07-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '12942',
+    cedula: '12942',
+    nombre: 'AYALA JIMENEZ INGRITH ESTELA',
+    fechaNacimiento: '1988-01-22',
+    edad: 38,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-02-10',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-02-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '75409',
+    cedula: '75409',
+    nombre: 'LUNA HOYOS SANDRA MILENA',
+    fechaNacimiento: '1987-04-16',
+    edad: 38,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-05-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-05-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '93693',
+    cedula: '93693',
+    nombre: 'MARTINEZ SUAREZ CARLOS ALBEIRO',
+    fechaNacimiento: '1985-10-30',
+    edad: 40,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2018-09-01',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2018-09-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '187832',
+    cedula: '187832',
+    nombre: 'ROJAS GUILLEN KEINER',
+    fechaNacimiento: '1993-06-05',
+    edad: 32,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-05-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-05-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '150118',
+    cedula: '150118',
+    nombre: 'PEDROZO NIEVES ANDRES ALFONSO',
+    fechaNacimiento: '1992-02-18',
+    edad: 34,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-03-10',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-03-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '4048',
+    cedula: '4048',
+    nombre: 'ROMERO MORENO DIEGO ANDRES',
+    fechaNacimiento: '1986-11-28',
+    edad: 39,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2018-10-01',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2018-10-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '205205',
+    cedula: '205205',
+    nombre: 'FAJARDO OROZCO NEIDER FELIPE',
+    fechaNacimiento: '1995-08-14',
+    edad: 30,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2022-05-20',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2022-05-20T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '169261',
+    cedula: '169261',
+    nombre: 'MOYA MIRANDA ABIMAEL DAVID',
+    fechaNacimiento: '1993-09-02',
+    edad: 32,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-01-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-01-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '173528',
+    cedula: '173528',
+    nombre: 'PUSHAINA JUSAYU LUIS EDUARDO',
+    fechaNacimiento: '1994-04-20',
+    edad: 31,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-03-01',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-03-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '109757',
+    cedula: '109757',
+    nombre: 'PEÑALOZA NUÑEZ JUAN ANTONIO',
+    fechaNacimiento: '1988-12-10',
+    edad: 37,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-07-15',
+    puesto: 'DESBOTONE',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-07-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '4248',
+    cedula: '4248',
+    nombre: 'MAMBUSCAY PIEDAD ANGELY',
+    fechaNacimiento: '1985-03-17',
+    edad: 40,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2018-04-10',
+    puesto: 'DESBOTONE',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2018-04-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '167841',
+    cedula: '167841',
+    nombre: 'ESCALANTE SILVA RUBI YUMARY',
+    fechaNacimiento: '1992-07-29',
+    edad: 33,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-11-01',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-11-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '184629',
+    cedula: '184629',
+    nombre: 'HERNANDEZ MARTINEZ KATERINE',
+    fechaNacimiento: '1994-01-15',
+    edad: 32,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-08-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Salud Total EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-08-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '193584',
+    cedula: '193584',
+    nombre: 'GUTIÉRREZ GONZALEZ HUMBERTO ALBERTO',
+    fechaNacimiento: '1990-10-04',
+    edad: 35,
+    genero: 'M',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-10-20',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Sanitas EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-10-20T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '125190',
+    cedula: '125190',
+    nombre: 'MARTINEZ NUÑEZ DINA LUZ',
+    fechaNacimiento: '1988-05-18',
+    edad: 37,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2019-09-01',
+    puesto: 'SUPERVISOR',
+    eps: 'Compensar EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2019-09-01T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '177123',
+    cedula: '177123',
+    nombre: 'HERNANDEZ JAIMES MARLIX KARINA',
+    fechaNacimiento: '1993-03-12',
+    edad: 32,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2021-02-15',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'Nueva EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2021-02-15T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  {
+    id: '151631',
+    cedula: '151631',
+    nombre: 'PUSHAINA IPUANA ROSA ISELA',
+    fechaNacimiento: '1992-11-25',
+    edad: 33,
+    genero: 'F',
+    sedeId: 'MG-HA',
+    fechaIngreso: '2020-04-10',
+    puesto: 'CORTE-BASES ALZ',
+    eps: 'SURA EPS',
+    arl: 'ARL SURA',
+    estado: 'ACTIVO',
+    createdAt: '2020-04-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T09:00:00.000Z',
+  },
+  // Trabajadores adicionales de otras sedes
   {
     id: '1017123456',
     cedula: '1017123456',
@@ -40,7 +625,7 @@ const SEED_WORKERS: PersonnelWorker[] = [
     genero: 'M',
     sedeId: 'MG-MG',
     fechaIngreso: '2021-03-15',
-    puesto: 'Técnico de Mantenimiento',
+    puesto: 'MANTENIMIENTO',
     eps: 'SURA EPS',
     arl: 'ARL SURA',
     estado: 'ACTIVO',
@@ -56,7 +641,7 @@ const SEED_WORKERS: PersonnelWorker[] = [
     genero: 'F',
     sedeId: 'MG-HA',
     fechaIngreso: '2022-06-01',
-    puesto: 'Operadora de Planta',
+    puesto: 'BONCHADOR',
     eps: 'Sanitas EPS',
     arl: 'ARL SURA',
     estado: 'ACTIVO',
@@ -72,62 +657,12 @@ const SEED_WORKERS: PersonnelWorker[] = [
     genero: 'M',
     sedeId: 'MG-SC',
     fechaIngreso: '2019-11-10',
-    puesto: 'Coordinador de Almacén',
+    puesto: 'ALMACEN',
     eps: 'Compensar EPS',
     arl: 'Positiva Compañía de Seguros',
     estado: 'ACTIVO',
     createdAt: '2019-11-10T08:00:00.000Z',
     updatedAt: '2026-01-10T09:00:00.000Z',
-  },
-  {
-    id: '43567812',
-    cedula: '43567812',
-    nombre: 'Gloria Patricia Betancur',
-    fechaNacimiento: '1980-02-17',
-    edad: 46,
-    genero: 'F',
-    sedeId: 'MG-JA',
-    fechaIngreso: '2018-02-01',
-    puesto: 'Auxiliar de Servicios Generales',
-    eps: 'Salud Total EPS',
-    arl: 'ARL SURA',
-    estado: 'ACTIVO',
-    createdAt: '2018-02-01T08:00:00.000Z',
-    updatedAt: '2026-01-10T09:00:00.000Z',
-  },
-  {
-    id: '71987654',
-    cedula: '71987654',
-    nombre: 'Guillermo Alejandro Duque',
-    fechaNacimiento: '1979-09-30',
-    edad: 47,
-    genero: 'M',
-    sedeId: 'MG-ER',
-    fechaIngreso: '2017-08-15',
-    puesto: 'Vigilante de Seguridad',
-    eps: 'Nueva EPS',
-    arl: 'Seguros Bolívar ARL',
-    estado: 'ACTIVO',
-    createdAt: '2017-08-15T08:00:00.000Z',
-    updatedAt: '2026-01-10T09:00:00.000Z',
-  },
-  {
-    id: '98765432',
-    cedula: '98765432',
-    nombre: 'Hernán Darío Gómez Peláez',
-    fechaNacimiento: '1975-12-05',
-    edad: 51,
-    genero: 'M',
-    sedeId: 'MG-MG',
-    fechaIngreso: '2015-04-10',
-    puesto: 'Conductor Operativo PESV',
-    eps: 'SURA EPS',
-    arl: 'ARL SURA',
-    estado: 'INACTIVO',
-    fechaRetiro: '2025-12-15',
-    motivoRetiro: 'Renuncia voluntaria',
-    createdAt: '2015-04-10T08:00:00.000Z',
-    updatedAt: '2025-12-15T10:00:00.000Z',
   },
 ];
 
@@ -236,150 +771,107 @@ const SEED_RECORDS: SSTRecord[] = [
   },
 ];
 
-const SEED_EPP_DELIVERIES: EPPDeliveryRecord[] = [
+const SEED_ENTREGA_EPP_MG: EntregaEPPMGRecord[] = [
   {
     id: 'epp-rec-001',
-    numeroActa: 'EPP-MG-2026-001',
-    fecha: '2026-03-01',
-    sedeId: 'MG-MG',
-    area: 'Mantenimiento',
-    supervisor: 'Andrés Felipe Gómez',
-    cedulaTrabajador: '1017123456',
-    nombreTrabajador: 'Mateo Arango Jaramillo',
-    puestoTrabajador: 'Técnico de Mantenimiento',
-    motivo: 'DOTACION_PERIODICA',
-    items: [
-      {
-        itemId: 'epp-casco',
-        categoria: 'CABEZA_ROSTRO',
-        nombre: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
-        cantidad: 1,
-        talla: 'Ajustable',
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-gafas-claras',
-        categoria: 'VISUAL',
-        nombre: 'Gafas de Seguridad Transparentes Antirrayadura',
-        cantidad: 1,
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-guantes-vaqueta',
-        categoria: 'MANOS',
-        nombre: 'Guantes de Vaqueta Tipo Ingeniero',
-        cantidad: 2,
-        talla: '9 (L)',
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-botas-cuero',
-        categoria: 'PIES',
-        nombre: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
-        cantidad: 1,
-        talla: '41',
-        estado: 'NUEVO',
-      },
-    ],
-    observaciones: 'Entrega de dotación correspondiente al primer cuatrimestre del año. Elementos revisados a satisfacción.',
-    compromisoAceptado: true,
-    responsableEntrega: 'Supervisor SST Medellín',
-    responsableEmail: 'mg@mgconsultores.com',
-    estado: 'ENTREGADO_FIRMADO',
+    Id_Epp: 'EPP-MG-2026-001',
+    Fecha: '2026-03-01',
+    Año: 2026,
+    Mes: 'Marzo',
+    Sede: 'MG-MG',
+    Cédula: '1017123456',
+    Nombre: 'Mateo Arango Jaramillo',
+    Labor: 'Técnico de Mantenimiento',
+    Area: 'Mantenimiento',
+    Supervisor: 'Andrés Felipe Gómez',
+    Código_Epp: 'EPP-CAS-01',
+    Epp: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
+    Tipo_Entrega: 'Dotación Periódica',
+    Costo: 38500, // Tomado de la hoja Epp´s
+    Estado: 'Entregado y Firmado',
+    Foto_Entrega: 'https://images.unsplash.com/photo-1541888946425-d0fbb18f15f7?auto=format&fit=crop&w=600&q=80',
+    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    Responsable_SST: 'Supervisor SST Medellín (MG-MG)',
+    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    observaciones: 'Entrega de dotación correspondiente al primer cuatrimestre del año. Elemento verificado a satisfacción.',
     createdAt: '2026-03-01T09:00:00.000Z',
     updatedAt: '2026-03-01T09:15:00.000Z',
     createdBy: 'mg@mgconsultores.com',
   },
   {
     id: 'epp-rec-002',
-    numeroActa: 'EPP-HA-2026-002',
-    fecha: '2026-03-05',
-    sedeId: 'MG-HA',
-    area: 'Producción',
-    supervisor: 'María Eugenia Salazar',
-    cedulaTrabajador: '1020456789',
-    nombreTrabajador: 'Laura Camila Restrepo Morales',
-    puestoTrabajador: 'Operadora de Planta',
-    motivo: 'DOTACION_PERIODICA',
-    items: [
-      {
-        itemId: 'epp-casco',
-        categoria: 'CABEZA_ROSTRO',
-        nombre: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
-        cantidad: 1,
-        talla: 'Ajustable',
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-guantes-nitrilo',
-        categoria: 'MANOS',
-        nombre: 'Guantes de Nitrilo Verde Calibre 15',
-        cantidad: 3,
-        talla: '8',
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-protectores-insercion',
-        categoria: 'AUDITIVA',
-        nombre: 'Protectores Auditivos Tipo Inserción con Cordón',
-        cantidad: 2,
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-botas-cuero',
-        categoria: 'PIES',
-        nombre: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
-        cantidad: 1,
-        talla: '38',
-        estado: 'NUEVO',
-      },
-    ],
-    observaciones: 'Entrega regular a trabajadora operativa en planta.',
-    compromisoAceptado: true,
-    responsableEntrega: 'Supervisor SST Hacienda',
-    responsableEmail: 'ha@mgconsultores.com',
-    estado: 'ENTREGADO_FIRMADO',
+    Id_Epp: 'EPP-HA-2026-002',
+    Fecha: '2026-03-05',
+    Año: 2026,
+    Mes: 'Marzo',
+    Sede: 'MG-HA',
+    Cédula: '1020456789',
+    Nombre: 'Laura Camila Restrepo Morales',
+    Labor: 'Operadora de Planta',
+    Area: 'Producción',
+    Supervisor: 'María Eugenia Salazar',
+    Código_Epp: 'EPP-GUA-02',
+    Epp: 'Guantes de Nitrilo Verde Calibre 15 (Químico)',
+    Tipo_Entrega: 'Dotación Periódica',
+    Costo: 12500, // Tomado de la hoja Epp´s
+    Estado: 'Entregado y Firmado',
+    Foto_Entrega: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80',
+    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    Responsable_SST: 'Supervisor SST Hacienda (MG-HA)',
+    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    observaciones: 'Entrega de guantes de protección para manipulación segura en línea de ensamble.',
     createdAt: '2026-03-05T10:00:00.000Z',
     updatedAt: '2026-03-05T10:20:00.000Z',
     createdBy: 'ha@mgconsultores.com',
   },
   {
     id: 'epp-rec-003',
-    numeroActa: 'EPP-SC-2026-003',
-    fecha: '2026-03-12',
-    sedeId: 'MG-SC',
-    area: 'Almacén',
-    supervisor: 'Guillermo León Vélez',
-    cedulaTrabajador: '1035678901',
-    nombreTrabajador: 'Juan Pablo Zapata Ochoa',
-    puestoTrabajador: 'Coordinador de Almacén',
-    motivo: 'REPOSICION_DESGASTE',
-    items: [
-      {
-        itemId: 'epp-guantes-anticorte',
-        categoria: 'MANOS',
-        nombre: 'Guantes de Tejido HPPE Anticorte Nivel 5',
-        cantidad: 2,
-        talla: '9 (L)',
-        estado: 'NUEVO',
-      },
-      {
-        itemId: 'epp-chaleco-reflectivo',
-        categoria: 'CORPORAL_ALTURAS',
-        nombre: 'Chaleco de Alta Visibilidad con Cintas Reflectivas',
-        cantidad: 1,
-        talla: 'L',
-        estado: 'NUEVO',
-      },
-    ],
-    observaciones: 'Reposición por desgaste normal de guantes en manejo de estibas.',
-    compromisoAceptado: true,
-    responsableEntrega: 'Supervisor SST Santa Cruz',
-    responsableEmail: 'sc@mgconsultores.com',
-    estado: 'ENTREGADO_FIRMADO',
+    Id_Epp: 'EPP-SC-2026-003',
+    Fecha: '2026-03-12',
+    Año: 2026,
+    Mes: 'Marzo',
+    Sede: 'MG-SC',
+    Cédula: '1035678901',
+    Nombre: 'Juan Pablo Zapata Ochoa',
+    Labor: 'Coordinador de Almacén',
+    Area: 'Almacén',
+    Supervisor: 'Guillermo León Vélez',
+    Código_Epp: 'EPP-BOT-01',
+    Epp: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
+    Tipo_Entrega: 'Reposición por Desgaste',
+    Costo: 138000, // Tomado de la hoja Epp´s
+    Estado: 'Entregado y Firmado',
+    Foto_Entrega: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80',
+    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    Responsable_SST: 'Supervisor SST Santa Cruz (MG-SC)',
+    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    observaciones: 'Reposición por desgaste normal de la suela en bodegas. Talla 41 entregada y verificada.',
     createdAt: '2026-03-12T14:30:00.000Z',
     updatedAt: '2026-03-12T14:45:00.000Z',
     createdBy: 'sc@mgconsultores.com',
+  },
+  {
+    id: 'epp-rec-004',
+    Id_Epp: 'EPP-HA-2026-004',
+    Fecha: '2026-03-14',
+    Año: 2026,
+    Mes: 'Marzo',
+    Sede: 'MG-HA',
+    Cédula: '1020456789',
+    Nombre: 'Laura Camila Restrepo Morales',
+    Labor: 'Operadora de Planta',
+    Area: 'Producción',
+    Supervisor: 'María Eugenia Salazar',
+    Código_Epp: 'EPP-GAF-01',
+    Epp: 'Gafas de Seguridad Transparentes Antirrayadura y Antiempañante',
+    Tipo_Entrega: 'Dotación Periódica',
+    Costo: 14500, // Tomado de la hoja Epp´s
+    Estado: 'Pendiente de Firma',
+    Responsable_SST: 'Supervisor SST Hacienda (MG-HA)',
+    observaciones: 'Dotación periódica entregada en turno de la tarde. Pendiente firma en tablet.',
+    createdAt: '2026-03-14T16:00:00.000Z',
+    updatedAt: '2026-03-14T16:00:00.000Z',
+    createdBy: 'ha@mgconsultores.com',
   },
 ];
 
@@ -404,8 +896,11 @@ export const storageService = {
     if (!localStorage.getItem(KEYS.RECORDS)) {
       localStorage.setItem(KEYS.RECORDS, JSON.stringify(SEED_RECORDS));
     }
+    if (!localStorage.getItem(KEYS.EPP_CATALOG)) {
+      localStorage.setItem(KEYS.EPP_CATALOG, JSON.stringify(CATALOGO_EPPS));
+    }
     if (!localStorage.getItem(KEYS.EPP_DELIVERIES)) {
-      localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(SEED_EPP_DELIVERIES));
+      localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(SEED_ENTREGA_EPP_MG));
     }
   },
 
@@ -645,107 +1140,174 @@ export const storageService = {
     return true;
   },
 
-  // ---------------- EPP DELIVERIES ----------------
-  getEPPDeliveries(filters?: {
+  // ---------------- HOJA OFICIAL: ENTREGA EPP'S MG ----------------
+  getEntregaEPPRecords(filters?: {
     sedeId?: string;
     estado?: string;
     search?: string;
     cedulaTrabajador?: string;
-  }): EPPDeliveryRecord[] {
-    let list: EPPDeliveryRecord[];
+  }): EntregaEPPMGRecord[] {
+    let list: EntregaEPPMGRecord[];
     try {
       const stored = localStorage.getItem(KEYS.EPP_DELIVERIES);
-      list = stored ? JSON.parse(stored) : SEED_EPP_DELIVERIES;
+      list = stored ? JSON.parse(stored) : SEED_ENTREGA_EPP_MG;
     } catch {
-      list = SEED_EPP_DELIVERIES;
+      list = SEED_ENTREGA_EPP_MG;
     }
 
     if (!filters) return list;
 
     return list.filter((item) => {
-      if (filters.sedeId && filters.sedeId !== 'TODAS' && item.sedeId !== filters.sedeId) return false;
-      if (filters.estado && filters.estado !== 'TODOS' && item.estado !== filters.estado) return false;
-      if (filters.cedulaTrabajador && item.cedulaTrabajador !== filters.cedulaTrabajador) return false;
+      if (filters.sedeId && filters.sedeId !== 'TODAS' && item.Sede !== filters.sedeId) return false;
+      if (filters.estado && filters.estado !== 'TODOS' && item.Estado !== filters.estado) return false;
+      if (filters.cedulaTrabajador && item.Cédula !== filters.cedulaTrabajador) return false;
       if (filters.search) {
         const query = filters.search.toLowerCase();
         const matches =
-          item.numeroActa.toLowerCase().includes(query) ||
-          item.nombreTrabajador.toLowerCase().includes(query) ||
-          item.cedulaTrabajador.toLowerCase().includes(query) ||
-          item.area.toLowerCase().includes(query) ||
-          item.supervisor.toLowerCase().includes(query) ||
-          item.items.some((i) => i.nombre.toLowerCase().includes(query));
+          (item.Id_Epp && item.Id_Epp.toLowerCase().includes(query)) ||
+          (item.Nombre && item.Nombre.toLowerCase().includes(query)) ||
+          (item.Cédula && item.Cédula.toLowerCase().includes(query)) ||
+          (item.Labor && item.Labor.toLowerCase().includes(query)) ||
+          (item.Area && item.Area.toLowerCase().includes(query)) ||
+          (item.Supervisor && item.Supervisor.toLowerCase().includes(query)) ||
+          (item.Código_Epp && item.Código_Epp.toLowerCase().includes(query)) ||
+          (item.Epp && item.Epp.toLowerCase().includes(query));
         if (!matches) return false;
       }
       return true;
     });
   },
 
-  getEPPDeliveryById(id: string): EPPDeliveryRecord | undefined {
-    const list = this.getEPPDeliveries();
-    return list.find((d) => d.id === id);
+  getEntregaEPPRecordById(id: string): EntregaEPPMGRecord | undefined {
+    const list = this.getEntregaEPPRecords();
+    return list.find((d) => d.id === id || d.Id_Epp === id);
   },
 
-  saveEPPDelivery(delivery: EPPDeliveryRecord, auditUser: { email: string; name: string }): EPPDeliveryRecord {
-    const list = this.getEPPDeliveries();
-    const index = list.findIndex((d) => d.id === delivery.id);
-    let updated: EPPDeliveryRecord[];
+  saveEntregaEPPRecord(record: EntregaEPPMGRecord, auditUser: { email: string; name: string }): EntregaEPPMGRecord {
+    const list = this.getEntregaEPPRecords();
+    const index = list.findIndex((d) => d.id === record.id || d.Id_Epp === record.Id_Epp);
+    let updated: EntregaEPPMGRecord[];
     const isNew = index === -1;
 
+    // Ensure year and month are auto-calculated from date
+    const itemToSave: EntregaEPPMGRecord = {
+      ...record,
+      Año: record.Año || getAnioFecha(record.Fecha),
+      Mes: record.Mes || getMesEspanol(record.Fecha),
+      updatedAt: new Date().toISOString(),
+    };
+
     if (isNew) {
-      updated = [delivery, ...list];
+      updated = [itemToSave, ...list];
       auditService.log(
         auditUser.email,
         auditUser.name,
         'CREAR',
-        "Entrega EPP's",
-        delivery.numeroActa,
-        `Acta de Entrega de EPP ${delivery.numeroActa} registrada para ${delivery.nombreTrabajador} en sede ${delivery.sedeId} con ${delivery.items.length} elementos`,
+        "Entrega Epp´s MG",
+        itemToSave.Id_Epp,
+        `Registro de Entrega de EPP ${itemToSave.Id_Epp} para ${itemToSave.Nombre} (C.C. ${itemToSave.Cédula}) en sede ${itemToSave.Sede}. Elemento: ${itemToSave.Epp} | Costo: $${itemToSave.Costo}`,
         undefined,
-        delivery
+        itemToSave
       );
     } else {
       const prev = list[index];
       updated = [...list];
-      updated[index] = { ...delivery, updatedAt: new Date().toISOString() };
+      updated[index] = itemToSave;
       auditService.log(
         auditUser.email,
         auditUser.name,
         'EDITAR',
-        "Entrega EPP's",
-        delivery.numeroActa,
-        `Actualización de Acta de Entrega de EPP ${delivery.numeroActa} para ${delivery.nombreTrabajador}`,
+        "Entrega Epp´s MG",
+        itemToSave.Id_Epp,
+        `Actualización de Entrega de EPP ${itemToSave.Id_Epp} para ${itemToSave.Nombre}`,
         prev,
-        delivery
+        itemToSave
       );
     }
 
     localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
     this.notify();
-    return isNew ? delivery : updated[index];
+    return itemToSave;
   },
 
-  deleteEPPDelivery(id: string, auditUser: { email: string; name: string }): boolean {
-    const list = this.getEPPDeliveries();
-    const target = list.find((d) => d.id === id);
+  deleteEntregaEPPRecord(id: string, auditUser: { email: string; name: string }): boolean {
+    const list = this.getEntregaEPPRecords();
+    const target = list.find((d) => d.id === id || d.Id_Epp === id);
     if (!target) return false;
 
-    const updated = list.filter((d) => d.id !== id);
+    const updated = list.filter((d) => d.id !== id && d.Id_Epp !== id);
     localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
 
     auditService.log(
       auditUser.email,
       auditUser.name,
       'EDITAR',
-      "Entrega EPP's",
-      target.numeroActa,
-      `Eliminación del acta de Entrega de EPP ${target.numeroActa} del trabajador ${target.nombreTrabajador}`,
+      "Entrega Epp´s MG",
+      target.Id_Epp,
+      `Eliminación del registro de Entrega de EPP ${target.Id_Epp} del trabajador ${target.Nombre}`,
       target,
       undefined
     );
 
     this.notify();
     return true;
+  },
+
+  // ---------------- HOJA DE COSTOS: EPP'S ----------------
+  getEPPCatalog(): EPPCatalogItem[] {
+    try {
+      const stored = localStorage.getItem(KEYS.EPP_CATALOG);
+      return stored ? JSON.parse(stored) : CATALOGO_EPPS;
+    } catch {
+      return CATALOGO_EPPS;
+    }
+  },
+
+  getEPPCost(codigoEpp: string): number {
+    const catalog = this.getEPPCatalog();
+    const found = catalog.find(
+      (c) =>
+        c.codigoEpp.toLowerCase() === codigoEpp.toLowerCase() ||
+        c.epp.toLowerCase() === codigoEpp.toLowerCase()
+    );
+    return found?.costo || 0;
+  },
+
+  saveEPPCatalogItem(item: EPPCatalogItem, auditUser: { email: string; name: string }): EPPCatalogItem {
+    const list = this.getEPPCatalog();
+    const idx = list.findIndex((c) => c.codigoEpp === item.codigoEpp);
+    let updated: EPPCatalogItem[];
+    if (idx === -1) {
+      updated = [...list, item];
+    } else {
+      updated = [...list];
+      updated[idx] = item;
+    }
+    localStorage.setItem(KEYS.EPP_CATALOG, JSON.stringify(updated));
+    auditService.log(
+      auditUser.email,
+      auditUser.name,
+      'EDITAR',
+      "Catálogo Epp´s",
+      item.codigoEpp,
+      `Actualización de costo de ${item.epp}: $${item.costo}`
+    );
+    this.notify();
+    return item;
+  },
+
+  // Métodos de conveniencia para compatibilidad
+  getEPPDeliveries(filters?: any): any[] {
+    return this.getEntregaEPPRecords(filters);
+  },
+  getEPPDeliveryById(id: string): any {
+    return this.getEntregaEPPRecordById(id);
+  },
+  saveEPPDelivery(delivery: any, auditUser: { email: string; name: string }): any {
+    return this.saveEntregaEPPRecord(delivery, auditUser);
+  },
+  deleteEPPDelivery(id: string, auditUser: { email: string; name: string }): boolean {
+    return this.deleteEntregaEPPRecord(id, auditUser);
   },
 
   // ---------------- CATALOGS ----------------
