@@ -16,12 +16,14 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Upload,
+  Code2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { isFirebaseConfigured } from '../../config/firebase';
 import { ROLES, INITIAL_SEDES } from '../../config/constants';
 import { Role } from '../../types';
 import { googleDriveService, TARGET_DRIVE_FOLDER } from '../../services/googleDriveService';
+import { AppsScriptConnectionModal } from '../epp/AppsScriptConnectionModal';
 
 interface SystemUser {
   id: string;
@@ -68,6 +70,7 @@ export const SettingsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'firebase' | 'deployment' | 'google_drive'>('users');
   const [isDriveSyncing, setIsDriveSyncing] = useState(false);
   const [driveSyncResult, setDriveSyncResult] = useState<any>(null);
+  const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
 
   // Add User State
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -386,11 +389,22 @@ git push -u origin main`}
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
                 type="button"
+                onClick={() => setIsScriptModalOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+              >
+                <Code2 className="w-4 h-4" />
+                <span>Script Conexión Automática (Entrega Epp´s MG)</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={async () => {
                   setIsDriveSyncing(true);
                   setDriveSyncResult(null);
                   try {
-                    const res = await googleDriveService.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id);
+                    const res = googleDriveService.isAppsScriptConfigured()
+                      ? await googleDriveService.syncFromAppsScript()
+                      : await googleDriveService.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id);
                     setDriveSyncResult(res);
                   } catch (e: any) {
                     setDriveSyncResult({ success: false, message: e.message });
@@ -402,7 +416,7 @@ git push -u origin main`}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A2958] hover:bg-[#123e80] text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${isDriveSyncing ? 'animate-spin' : ''}`} />
-                <span>{isDriveSyncing ? 'Sincronizando con Google Drive...' : 'Sincronizar Usuarios de la Hoja Usuario Ahora'}</span>
+                <span>{isDriveSyncing ? 'Sincronizando con Google Drive...' : 'Sincronizar Datos Ahora'}</span>
               </button>
 
               <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-300 cursor-pointer">
@@ -513,7 +527,7 @@ git push -u origin main`}
                   <option value="TODAS">TODAS LAS SEDES</option>
                   {INITIAL_SEDES.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.codigo} - {s.nombre}
+                      {s.codigo}
                     </option>
                   ))}
                 </select>
@@ -538,6 +552,12 @@ git push -u origin main`}
           </div>
         </div>
       )}
+
+      <AppsScriptConnectionModal
+        isOpen={isScriptModalOpen}
+        onClose={() => setIsScriptModalOpen(false)}
+        onConnected={(msg) => setDriveSyncResult({ success: true, message: msg })}
+      />
     </div>
   );
 };

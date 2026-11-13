@@ -181,7 +181,7 @@ export const CatalogsView: React.FC = () => {
                     OPERATIVA
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-slate-800">{s.nombre}</h3>
+                <h3 className="text-base font-bold text-slate-800">{s.codigo}</h3>
                 <div className="mt-3 space-y-1 text-xs text-slate-500">
                   <p className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-slate-400" />
@@ -369,7 +369,7 @@ export const CatalogsView: React.FC = () => {
                 >
                   {sedes.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.codigo} - {s.nombre}
+                      {s.codigo}
                     </option>
                   ))}
                 </select>

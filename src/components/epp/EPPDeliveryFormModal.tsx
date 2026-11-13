@@ -33,7 +33,10 @@ import { SignaturePad } from '../common/SignaturePad';
 interface EPPDeliveryFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (record: EntregaEPPMGRecord) => void;
+  onSave: (
+    record: EntregaEPPMGRecord,
+    driveSyncResult?: { success: boolean; message: string; needsConfig?: boolean }
+  ) => void;
   editingDelivery?: EntregaEPPMGRecord | null;
 }
 
@@ -48,6 +51,9 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const supervisores = storageService.getSupervisores();
   const workers = storageService.getWorkers();
   const eppCatalog = storageService.getEPPCatalog();
+  const laboresCatalog = storageService.getLabores();
+  const areasCatalog = storageService.getAreas();
+  const tiposEntregaCatalog = storageService.getTiposEntrega();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,20 +99,20 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   // 7. Nombre
   const [nombre, setNombre] = useState('');
   // 8. Labor (Opciones de la hoja Labores o nueva ingresada)
-  const [labor, setLabor] = useState(CATALOGO_LABORES[0] || 'MIPE');
+  const [labor, setLabor] = useState(laboresCatalog[0] || CATALOGO_LABORES[0] || 'MIPE');
   const [isCustomLabor, setIsCustomLabor] = useState(false);
   // 9. Area (Opciones de la hoja Area)
-  const [area, setArea] = useState(CATALOGO_AREAS[0] || 'MIPE');
+  const [area, setArea] = useState(areasCatalog[0] || CATALOGO_AREAS[0] || 'MIPE');
   // 10. Supervisor (Lista de supervisores del maestro)
   const [supervisor, setSupervisor] = useState(CATALOGO_SUPERVISORES[0] || 'JERSSON SUAREZ');
   // 11. Código Epp (Solo el código)
-  const [codigoEpp, setCodigoEpp] = useState(CATALOGO_EPPS[0]?.codigoEpp || '7PRGUA47');
+  const [codigoEpp, setCodigoEpp] = useState(eppCatalog[0]?.codigoEpp || CATALOGO_EPPS[0]?.codigoEpp || '7PRGUA47');
   // 12. Epp (Nombre del Epp traído automáticamente de la hoja Epp´s)
-  const [epp, setEpp] = useState(CATALOGO_EPPS[0]?.epp || 'GUANTE CAUCHO CAL 55 NO.9');
+  const [epp, setEpp] = useState(eppCatalog[0]?.epp || CATALOGO_EPPS[0]?.epp || 'GUANTE CAUCHO CAL 55 NO.9');
   // 13. Tipo_Entrega (Opciones de la hoja Tipo_Entrega)
-  const [tipoEntrega, setTipoEntrega] = useState(CATALOGO_TIPO_ENTREGA[0] || 'REPOSICIÓN');
+  const [tipoEntrega, setTipoEntrega] = useState(tiposEntregaCatalog[0] || CATALOGO_TIPO_ENTREGA[0] || 'REPOSICIÓN');
   // 14. Costo (Costo oficial de la hoja Epp´s)
-  const [costo, setCosto] = useState<number>(CATALOGO_EPPS[0]?.costo || 10544);
+  const [costo, setCosto] = useState<number>(eppCatalog[0]?.costo || CATALOGO_EPPS[0]?.costo || 10544);
   // 15. Estado
   const [estado, setEstado] = useState<'Entregado y Firmado' | 'Pendiente de Firma' | 'Borrador'>('Entregado y Firmado');
   // 16. Foto_Entrega
@@ -151,7 +157,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       // Labor: verificar si está en la lista o es personalizada
       if (found.puesto) {
         const foundLaborUpper = found.puesto.trim().toUpperCase();
-        const matched = CATALOGO_LABORES.find(
+        const matched = laboresCatalog.find(
           (l) => l.toUpperCase() === foundLaborUpper || foundLaborUpper.includes(l.toUpperCase())
         );
         if (matched) {
@@ -164,7 +170,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       }
       // Area
       if (found.area) {
-        const matchedArea = CATALOGO_AREAS.find(
+        const matchedArea = areasCatalog.find(
           (a) => a.toLowerCase() === found.area?.toLowerCase()
         );
         if (matchedArea) {
@@ -185,7 +191,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const handleEppCodeChange = (selectedCodigo: string) => {
     const cleanCode = selectedCodigo.split(' - ')[0].trim();
     setCodigoEpp(cleanCode);
-    const item = CATALOGO_EPPS.find((c) => c.codigoEpp === cleanCode) || eppCatalog.find((c) => c.codigoEpp === cleanCode);
+    const item = eppCatalog.find((c) => c.codigoEpp === cleanCode) || CATALOGO_EPPS.find((c) => c.codigoEpp === cleanCode);
     if (item) {
       setEpp(item.epp);
       setCosto(item.costo); // Costo automático de la hoja Epp´s
@@ -320,19 +326,24 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       createdBy: editingDelivery?.createdBy || user?.email || 'sst@mgconsultores.com',
     };
 
-    // If authenticated with Google Drive, attempt append to Drive file directly
-    if (googleDriveService.isAuthenticated()) {
+    // Attempt automatic save to Drive (Apps Script Web App or Google OAuth)
+    let driveResult: { success: boolean; message: string; needsConfig?: boolean } | undefined;
+    if (googleDriveService.isConnectedAutomatically()) {
       setDriveSyncing(true);
       try {
-        await googleDriveService.appendEntregaEPPRecord(record);
-      } catch (err) {
+        driveResult = await googleDriveService.appendEntregaEPPRecord(record);
+      } catch (err: any) {
         console.warn('Sync to drive warning:', err);
+        driveResult = {
+          success: false,
+          message: err?.message || 'Error al sincronizar con Google Drive.',
+        };
       } finally {
         setDriveSyncing(false);
       }
     }
 
-    onSave(record);
+    onSave(record, driveResult);
   };
 
   if (!isOpen) return null;
@@ -420,7 +431,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                 >
                   {sedes.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.id} - {s.nombre}
+                      {s.id}
                     </option>
                   ))}
                 </select>
@@ -498,7 +509,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                       type="button"
                       onClick={() => {
                         setIsCustomLabor(false);
-                        setLabor(CATALOGO_LABORES[0]);
+                        setLabor(laboresCatalog[0] || CATALOGO_LABORES[0]);
                       }}
                       className="text-[9px] text-blue-700 hover:underline font-bold"
                     >
@@ -521,14 +532,14 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                       required
                     />
                     <datalist id="labores-maestro-list">
-                      {CATALOGO_LABORES.map((lab) => (
+                      {laboresCatalog.map((lab) => (
                         <option key={lab} value={lab} />
                       ))}
                     </datalist>
                   </div>
                 ) : (
                   <select
-                    value={CATALOGO_LABORES.includes(labor) ? labor : '__OTRA__'}
+                    value={laboresCatalog.includes(labor) ? labor : '__OTRA__'}
                     onChange={(e) => {
                       if (e.target.value === '__OTRA__') {
                         setIsCustomLabor(true);
@@ -540,7 +551,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                     className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
                     required
                   >
-                    {CATALOGO_LABORES.map((lab) => (
+                    {laboresCatalog.map((lab) => (
                       <option key={lab} value={lab}>
                         {lab}
                       </option>
@@ -564,7 +575,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
                   required
                 >
-                  {CATALOGO_AREAS.map((ar) => (
+                  {areasCatalog.map((ar) => (
                     <option key={ar} value={ar}>
                       {ar}
                     </option>
@@ -617,7 +628,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   onChange={(e) => handleEppCodeChange(e.target.value)}
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-[#0A2958] font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
                 >
-                  {CATALOGO_EPPS.map((cat) => (
+                  {eppCatalog.map((cat) => (
                     <option key={cat.codigoEpp} value={cat.codigoEpp}>
                       {cat.codigoEpp} - {cat.epp}
                     </option>
@@ -673,7 +684,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   onChange={(e) => setTipoEntrega(e.target.value)}
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
                 >
-                  {CATALOGO_TIPO_ENTREGA.map((tipo) => (
+                  {tiposEntregaCatalog.map((tipo) => (
                     <option key={tipo} value={tipo}>
                       {tipo}
                     </option>

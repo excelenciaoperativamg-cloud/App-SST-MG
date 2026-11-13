@@ -48,7 +48,10 @@ function MainApp() {
 
   // Automatic background sync with Google Drive when app is active
   React.useEffect(() => {
-    if (isAuthenticated && googleDriveService.isAuthenticated()) {
+    if (!isAuthenticated) return;
+    if (googleDriveService.isAppsScriptConfigured()) {
+      googleDriveService.syncFromAppsScript().catch(() => {});
+    } else if (googleDriveService.isAuthenticated()) {
       googleDriveService.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id).catch(() => {});
     }
   }, [isAuthenticated]);

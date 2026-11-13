@@ -147,7 +147,7 @@ export const PersonnelMasterView: React.FC = () => {
               <option value="TODAS">Todas las Sedes</option>
               {INITIAL_SEDES.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.codigo} - {s.nombre}
+                  {s.codigo}
                 </option>
               ))}
             </select>

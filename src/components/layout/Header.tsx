@@ -56,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               <option value="TODAS">🏢 TODAS LAS SEDES (Acceso Total Admin)</option>
               {INITIAL_SEDES.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.codigo} - {s.nombre}
+                  {s.codigo}
                 </option>
               ))}
             </select>
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             <Building2 className="h-4 w-4 text-[#0A2958]" />
             <span className="font-semibold text-slate-600">Sede Asignada:</span>
             <span className="font-bold text-[#0A2958]">
-              {INITIAL_SEDES.find((s) => s.id === user?.siteId)?.nombre || user?.siteId}
+              {user?.siteId}
             </span>
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
               <Lock className="w-2.5 h-2.5" />

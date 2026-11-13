@@ -12,6 +12,9 @@ import {
   EntregaEPPMGRecord,
   EPPCatalogItem,
   CATALOGO_EPPS,
+  CATALOGO_LABORES,
+  CATALOGO_AREAS,
+  CATALOGO_TIPO_ENTREGA,
   getMesEspanol,
   getAnioFecha,
   EPPDeliveryRecord,
@@ -30,6 +33,9 @@ const KEYS = {
   RECORDS: 'mg_sst_records',
   EPP_DELIVERIES: 'mg_sst_entrega_epp_mg_v2',
   EPP_CATALOG: 'mg_sst_epps_catalog',
+  EPP_LABORES: 'mg_sst_epps_labores',
+  EPP_AREAS: 'mg_sst_epps_areas',
+  EPP_TIPOS: 'mg_sst_epps_tipos_entrega',
   SEDES: 'mg_sst_sedes',
   SUPERVISORES: 'mg_sst_supervisores',
   EPS: 'mg_sst_eps',
@@ -771,109 +777,8 @@ const SEED_RECORDS: SSTRecord[] = [
   },
 ];
 
-const SEED_ENTREGA_EPP_MG: EntregaEPPMGRecord[] = [
-  {
-    id: 'epp-rec-001',
-    Id_Epp: 'EPP-MG-2026-001',
-    Fecha: '2026-03-01',
-    Año: 2026,
-    Mes: 'Marzo',
-    Sede: 'MG-MG',
-    Cédula: '1017123456',
-    Nombre: 'Mateo Arango Jaramillo',
-    Labor: 'Técnico de Mantenimiento',
-    Area: 'Mantenimiento',
-    Supervisor: 'Andrés Felipe Gómez',
-    Código_Epp: 'EPP-CAS-01',
-    Epp: 'Casco de Seguridad Dieléctrico Tipo I Clase E',
-    Tipo_Entrega: 'Dotación Periódica',
-    Costo: 38500, // Tomado de la hoja Epp´s
-    Estado: 'Entregado y Firmado',
-    Foto_Entrega: 'https://images.unsplash.com/photo-1541888946425-d0fbb18f15f7?auto=format&fit=crop&w=600&q=80',
-    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    Responsable_SST: 'Supervisor SST Medellín (MG-MG)',
-    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    observaciones: 'Entrega de dotación correspondiente al primer cuatrimestre del año. Elemento verificado a satisfacción.',
-    createdAt: '2026-03-01T09:00:00.000Z',
-    updatedAt: '2026-03-01T09:15:00.000Z',
-    createdBy: 'mg@mgconsultores.com',
-  },
-  {
-    id: 'epp-rec-002',
-    Id_Epp: 'EPP-HA-2026-002',
-    Fecha: '2026-03-05',
-    Año: 2026,
-    Mes: 'Marzo',
-    Sede: 'MG-HA',
-    Cédula: '1020456789',
-    Nombre: 'Laura Camila Restrepo Morales',
-    Labor: 'Operadora de Planta',
-    Area: 'Producción',
-    Supervisor: 'María Eugenia Salazar',
-    Código_Epp: 'EPP-GUA-02',
-    Epp: 'Guantes de Nitrilo Verde Calibre 15 (Químico)',
-    Tipo_Entrega: 'Dotación Periódica',
-    Costo: 12500, // Tomado de la hoja Epp´s
-    Estado: 'Entregado y Firmado',
-    Foto_Entrega: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80',
-    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    Responsable_SST: 'Supervisor SST Hacienda (MG-HA)',
-    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    observaciones: 'Entrega de guantes de protección para manipulación segura en línea de ensamble.',
-    createdAt: '2026-03-05T10:00:00.000Z',
-    updatedAt: '2026-03-05T10:20:00.000Z',
-    createdBy: 'ha@mgconsultores.com',
-  },
-  {
-    id: 'epp-rec-003',
-    Id_Epp: 'EPP-SC-2026-003',
-    Fecha: '2026-03-12',
-    Año: 2026,
-    Mes: 'Marzo',
-    Sede: 'MG-SC',
-    Cédula: '1035678901',
-    Nombre: 'Juan Pablo Zapata Ochoa',
-    Labor: 'Coordinador de Almacén',
-    Area: 'Almacén',
-    Supervisor: 'Guillermo León Vélez',
-    Código_Epp: 'EPP-BOT-01',
-    Epp: 'Botas de Seguridad en Cuero con Puntera Dieléctrica',
-    Tipo_Entrega: 'Reposición por Desgaste',
-    Costo: 138000, // Tomado de la hoja Epp´s
-    Estado: 'Entregado y Firmado',
-    Foto_Entrega: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80',
-    Firma_Trabajador: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    Responsable_SST: 'Supervisor SST Santa Cruz (MG-SC)',
-    Firma_SST: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    observaciones: 'Reposición por desgaste normal de la suela en bodegas. Talla 41 entregada y verificada.',
-    createdAt: '2026-03-12T14:30:00.000Z',
-    updatedAt: '2026-03-12T14:45:00.000Z',
-    createdBy: 'sc@mgconsultores.com',
-  },
-  {
-    id: 'epp-rec-004',
-    Id_Epp: 'EPP-HA-2026-004',
-    Fecha: '2026-03-14',
-    Año: 2026,
-    Mes: 'Marzo',
-    Sede: 'MG-HA',
-    Cédula: '1020456789',
-    Nombre: 'Laura Camila Restrepo Morales',
-    Labor: 'Operadora de Planta',
-    Area: 'Producción',
-    Supervisor: 'María Eugenia Salazar',
-    Código_Epp: 'EPP-GAF-01',
-    Epp: 'Gafas de Seguridad Transparentes Antirrayadura y Antiempañante',
-    Tipo_Entrega: 'Dotación Periódica',
-    Costo: 14500, // Tomado de la hoja Epp´s
-    Estado: 'Pendiente de Firma',
-    Responsable_SST: 'Supervisor SST Hacienda (MG-HA)',
-    observaciones: 'Dotación periódica entregada en turno de la tarde. Pendiente firma en tablet.',
-    createdAt: '2026-03-14T16:00:00.000Z',
-    updatedAt: '2026-03-14T16:00:00.000Z',
-    createdBy: 'ha@mgconsultores.com',
-  },
-];
+const SEED_ENTREGA_EPP_MG: EntregaEPPMGRecord[] = [];
+const LEGACY_SEED_EPP_IDS = new Set(['epp-rec-001', 'epp-rec-002', 'epp-rec-003', 'epp-rec-004']);
 
 export const storageService = {
   // Initialize storage with seeds if empty
@@ -1150,9 +1055,12 @@ export const storageService = {
     let list: EntregaEPPMGRecord[];
     try {
       const stored = localStorage.getItem(KEYS.EPP_DELIVERIES);
-      list = stored ? JSON.parse(stored) : SEED_ENTREGA_EPP_MG;
+      const parsed: EntregaEPPMGRecord[] = stored ? JSON.parse(stored) : SEED_ENTREGA_EPP_MG;
+      list = Array.isArray(parsed)
+        ? parsed.filter((item) => !LEGACY_SEED_EPP_IDS.has(item.id))
+        : [];
     } catch {
-      list = SEED_ENTREGA_EPP_MG;
+      list = [];
     }
 
     if (!filters) return list;
@@ -1294,6 +1202,66 @@ export const storageService = {
     );
     this.notify();
     return item;
+  },
+
+  setEPPCatalog(items: EPPCatalogItem[]) {
+    if (!items || items.length === 0) return;
+    localStorage.setItem(KEYS.EPP_CATALOG, JSON.stringify(items));
+    this.notify();
+  },
+
+  getLabores(): string[] {
+    try {
+      const stored = localStorage.getItem(KEYS.EPP_LABORES);
+      const parsed = stored ? JSON.parse(stored) : null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : CATALOGO_LABORES;
+    } catch {
+      return CATALOGO_LABORES;
+    }
+  },
+
+  setLabores(items: string[]) {
+    if (!items || items.length === 0) return;
+    localStorage.setItem(KEYS.EPP_LABORES, JSON.stringify(items));
+    this.notify();
+  },
+
+  getAreas(): string[] {
+    try {
+      const stored = localStorage.getItem(KEYS.EPP_AREAS);
+      const parsed = stored ? JSON.parse(stored) : null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : CATALOGO_AREAS;
+    } catch {
+      return CATALOGO_AREAS;
+    }
+  },
+
+  setAreas(items: string[]) {
+    if (!items || items.length === 0) return;
+    localStorage.setItem(KEYS.EPP_AREAS, JSON.stringify(items));
+    this.notify();
+  },
+
+  getTiposEntrega(): string[] {
+    try {
+      const stored = localStorage.getItem(KEYS.EPP_TIPOS);
+      const parsed = stored ? JSON.parse(stored) : null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : CATALOGO_TIPO_ENTREGA;
+    } catch {
+      return CATALOGO_TIPO_ENTREGA;
+    }
+  },
+
+  setTiposEntrega(items: string[]) {
+    if (!items || items.length === 0) return;
+    localStorage.setItem(KEYS.EPP_TIPOS, JSON.stringify(items));
+    this.notify();
+  },
+
+  syncDeliveriesFromRemote(remoteRecords: EntregaEPPMGRecord[]) {
+    if (!Array.isArray(remoteRecords)) return;
+    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(remoteRecords));
+    this.notify();
   },
 
   // Métodos de conveniencia para compatibilidad

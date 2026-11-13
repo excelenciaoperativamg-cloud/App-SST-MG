@@ -388,7 +388,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className="font-bold text-[#0A2958] bg-white border border-slate-200 px-2 py-0.5 rounded">
                       {sede.codigo}
                     </span>
-                    <span className="font-semibold text-slate-700">{sede.nombre}</span>
                   </div>
                   <span className="font-bold text-slate-800">{count} reg.</span>
                 </div>

@@ -12,6 +12,9 @@ import { AppUser, INITIAL_APP_USERS } from '../config/users';
 import { Role } from '../types';
 import { EntregaEPPMGRecord } from '../types/epp';
 import { auditService } from './auditService';
+import { storageService } from './storageService';
+
+const APPS_SCRIPT_STORAGE_KEY = 'mg_sst_apps_script_url';
 
 // Initialize Firebase App safely (singleton)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -35,10 +38,10 @@ export const TARGET_DRIVE_FOLDER = {
 
 // Target Spreadsheet for Entrega Epp´s MG requested by user
 export const TARGET_ENTREGA_EPP_SPREADSHEET = {
-  id: '1LWD6Bg6wHavMlPBa_AlwOfxDPS2FZMSo2J4Dbcbbx9k',
+  id: '1LWD6Bg6wHavMIPBa_AlwOfxDPS2FZMs2J4Dbcbbx9k',
   name: 'Entrega Epp´s MG',
   sheetName: 'Entrega Epp´s',
-  url: 'https://docs.google.com/spreadsheets/d/1LWD6Bg6wHavMlPBa_AlwOfxDPS2FZMSo2J4Dbcbbx9k/edit?gid=1735670822#gid=1735670822',
+  url: 'https://docs.google.com/spreadsheets/d/1LWD6Bg6wHavMIPBa_AlwOfxDPS2FZMs2J4Dbcbbx9k/edit?gid=1735670822#gid=1735670822',
 };
 
 // In-memory token cache (do NOT store in localStorage)
@@ -72,6 +75,34 @@ export const googleDriveService = {
    */
   isAuthenticated(): boolean {
     return !!cachedAccessToken;
+  },
+
+  /**
+   * Apps Script Web App URL management (Automatic connection without OAuth popups)
+   */
+  getAppsScriptUrl(): string {
+    const stored = localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) || '';
+    const envUrl = (import.meta as any).env?.VITE_APPS_SCRIPT_URL || '';
+    return (stored || envUrl || '').trim();
+  },
+
+  setAppsScriptUrl(url: string): void {
+    const clean = url.trim();
+    if (clean) {
+      localStorage.setItem(APPS_SCRIPT_STORAGE_KEY, clean);
+    } else {
+      localStorage.removeItem(APPS_SCRIPT_STORAGE_KEY);
+    }
+    window.dispatchEvent(new CustomEvent('mg-sst-apps-script-updated', { detail: clean }));
+  },
+
+  isAppsScriptConfigured(): boolean {
+    const url = this.getAppsScriptUrl();
+    return Boolean(url && url.startsWith('https://script.google.com/'));
+  },
+
+  isConnectedAutomatically(): boolean {
+    return this.isAppsScriptConfigured() || this.isAuthenticated();
   },
 
   getGoogleUser(): FirebaseUser | null {
@@ -547,18 +578,211 @@ export const googleDriveService = {
   },
 
   /**
+   * Test live connection against the deployed Google Apps Script Web App
+   */
+  async testAppsScriptConnection(customUrl?: string): Promise<{
+    success: boolean;
+    message: string;
+    spreadsheetName?: string;
+    sheets?: string[];
+  }> {
+    const targetUrl = (customUrl ?? this.getAppsScriptUrl()).trim();
+    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        message: 'Ingresa una URL válida de implementación Web App (debe iniciar con https://script.google.com/...).',
+      };
+    }
+
+    try {
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      const res = await fetch(`${targetUrl}${separator}action=ping`, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!res.ok) {
+        throw new Error(`El servidor respondió con estado HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'El script no respondió correctamente.');
+      }
+
+      return {
+        success: true,
+        message: `Conexión automática verificada con "${data.spreadsheetName || 'Entrega Epp´s MG'}".`,
+        spreadsheetName: data.spreadsheetName,
+        sheets: data.sheets,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `No se pudo conectar con el Apps Script: ${err.message || 'Verifica que el acceso esté configurado como "Cualquier usuario"'}.`,
+      };
+    }
+  },
+
+  /**
+   * Full automatic synchronization via Google Apps Script Web App (no OAuth popup required)
+   */
+  async syncFromAppsScript(customUrl?: string): Promise<{
+    success: boolean;
+    records: EntregaEPPMGRecord[];
+    message: string;
+  }> {
+    const targetUrl = (customUrl ?? this.getAppsScriptUrl()).trim();
+    if (!targetUrl) {
+      return {
+        success: false,
+        records: [],
+        message: 'No hay URL de Apps Script configurada.',
+      };
+    }
+
+    try {
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      const res = await fetch(`${targetUrl}${separator}action=getAll`, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Error ejecutando doGet en Apps Script.');
+      }
+
+      const records: EntregaEPPMGRecord[] = Array.isArray(data.deliveries) ? data.deliveries : [];
+      if (Array.isArray(data.deliveries)) {
+        storageService.syncDeliveriesFromRemote(records);
+      }
+
+      if (Array.isArray(data.epps) && data.epps.length > 0) {
+        storageService.setEPPCatalog(data.epps);
+      }
+      if (Array.isArray(data.labores) && data.labores.length > 0) {
+        storageService.setLabores(data.labores);
+      }
+      if (Array.isArray(data.areas) && data.areas.length > 0) {
+        storageService.setAreas(data.areas);
+      }
+      if (Array.isArray(data.tiposEntrega) && data.tiposEntrega.length > 0) {
+        storageService.setTiposEntrega(data.tiposEntrega);
+      }
+      if (Array.isArray(data.maestro) && data.maestro.length > 0) {
+        storageService.bulkUpsertWorkers(data.maestro, {
+          email: 'apps-script@mgconsultores.com',
+          name: 'Sincronización Automática Drive',
+        });
+      }
+      if (Array.isArray(data.usuarios) && data.usuarios.length > 0) {
+        const headers = Object.keys(data.usuarios[0]);
+        const rows = [
+          headers,
+          ...data.usuarios.map((u: Record<string, any>) => headers.map((h) => u[h] ?? '')),
+        ];
+        const parsed = this.parseUsersRows(rows);
+        if (parsed.length > 0) {
+          this.persistUsers(parsed);
+        }
+      }
+
+      localStorage.setItem('mg_sst_drive_last_sync', new Date().toISOString());
+
+      return {
+        success: true,
+        records,
+        message: `Sincronización automática exitosa con "${data.spreadsheetName || 'Entrega Epp´s MG'}" (${records.length} registros).`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        message: `Error al sincronizar vía Apps Script: ${err.message || 'Error de red'}`,
+      };
+    }
+  },
+
+  /**
    * Append a new delivery record to Google Sheets in Drive: "Entrega Epp´s MG" -> "Entrega Epp´s"
+   * Automatically uses Google Apps Script Web App if configured (works on mobile & incognito),
+   * or falls back to Google Sheets API v4 if signed in via OAuth.
    */
   async appendEntregaEPPRecord(record: EntregaEPPMGRecord): Promise<{
     success: boolean;
     message: string;
     sheetName?: string;
     updatedRange?: string;
+    needsConfig?: boolean;
   }> {
+    const webAppUrl = this.getAppsScriptUrl();
+
+    // 1. Automatic connection via Google Apps Script Web App (preferred, zero-popup)
+    if (webAppUrl && webAppUrl.startsWith('https://script.google.com/')) {
+      try {
+        const cleanCodigoEpp = (record.Código_Epp || '').split(' - ')[0].trim();
+        const cleanEpp = (record.Epp || '').trim();
+
+        const res = await fetch(webAppUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          redirect: 'follow',
+          body: JSON.stringify({
+            action: 'appendEntregaEPP',
+            record: {
+              ...record,
+              Código_Epp: cleanCodigoEpp,
+              Epp: cleanEpp,
+            },
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'No se pudo guardar en Google Sheets.');
+        }
+
+        auditService.log(
+          record.createdBy || 'sst@mgconsultores.com',
+          record.Responsable_SST || 'Apps Script Sync',
+          'CREAR',
+          'Entrega Epp´s MG (Apps Script Drive)',
+          record.Id_Epp,
+          `Registro ${record.Id_Epp} (${record.Nombre} - ${cleanEpp}) guardado automáticamente en "${data.sheetName || 'Entrega Epp´s'}"`
+        );
+
+        return {
+          success: true,
+          message: data.message || `Registro guardado automáticamente en Entrega Epp´s MG (Hoja "${data.sheetName || 'Entrega Epp´s'}").`,
+          sheetName: data.sheetName || 'Entrega Epp´s',
+          updatedRange: data.row ? `Fila ${data.row}` : undefined,
+        };
+      } catch (err: any) {
+        console.warn('Apps Script POST warning:', err);
+        return {
+          success: false,
+          message: `Guardado localmente. Error al enviar a Apps Script: ${err.message || 'Verifica la URL del script'}`,
+        };
+      }
+    }
+
+    // 2. Fallback: Direct OAuth token if user signed in via Google Popup
     if (!cachedAccessToken) {
       return {
         success: false,
-        message: 'No hay sesión activa con Google Drive. El registro se guardó localmente y se sincronizará cuando inicies sesión en Google.',
+        needsConfig: true,
+        message: 'Guardado localmente. Configura el Script de Conexión Drive para guardar automáticamente en Entrega Epp´s MG.',
       };
     }
 
@@ -685,14 +909,69 @@ export const googleDriveService = {
   },
 
   /**
-   * Sync deliveries from Google Sheets "Entrega Epp´s MG"
+   * Delete a delivery record from Google Sheets via Apps Script Web App
    */
-  async fetchDeliveriesFromDrive(): Promise<{ success: boolean; records: EntregaEPPMGRecord[]; message: string }> {
+  async deleteEntregaEPPRecordFromDrive(idEpp: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const webAppUrl = this.getAppsScriptUrl();
+    if (!webAppUrl || !webAppUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        message: 'Eliminado localmente (sin URL de Apps Script configurada).',
+      };
+    }
+
+    try {
+      const res = await fetch(webAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'deleteEntregaEPP',
+          idEpp,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'No se pudo eliminar en Google Sheets.');
+      }
+
+      return {
+        success: true,
+        message: data.message || `Registro ${idEpp} eliminado de Entrega Epp´s MG.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Eliminado localmente. No se pudo eliminar de Drive: ${err.message || 'Actualiza el script en Apps Script'}`,
+      };
+    }
+  },
+
+  /**
+   * Sync deliveries from Google Sheets "Entrega Epp´s MG"
+   * Uses Apps Script Web App automatically if configured, else falls back to OAuth Sheets API.
+   */
+  async fetchDeliveriesFromDrive(): Promise<{ success: boolean; records: EntregaEPPMGRecord[]; message: string; needsConfig?: boolean }> {
+    if (this.isAppsScriptConfigured()) {
+      return await this.syncFromAppsScript();
+    }
+
     if (!cachedAccessToken) {
       return {
         success: false,
         records: [],
-        message: 'No hay sesión activa con Google Drive.',
+        needsConfig: true,
+        message: 'Configura la URL del Google Apps Script en "Script Conexión Drive" para sincronizar automáticamente sin iniciar sesión con Google.',
       };
     }
 

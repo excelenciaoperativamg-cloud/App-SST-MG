@@ -16,13 +16,16 @@ import {
   ExternalLink,
   Camera,
   PenTool,
+  Code2,
+  AlertTriangle,
 } from 'lucide-react';
 import { EntregaEPPMGRecord, formatCOP } from '../../types/epp';
 import { storageService } from '../../services/storageService';
 import { exportService } from '../../services/exportService';
-import { googleDriveService, TARGET_ENTREGA_EPP_SPREADSHEET } from '../../services/googleDriveService';
+import { googleDriveService } from '../../services/googleDriveService';
 import { useAuth } from '../../context/AuthContext';
 import { EPPDeliveryFormModal } from './EPPDeliveryFormModal';
+import { AppsScriptConnectionModal } from './AppsScriptConnectionModal';
 
 export const EPPDeliveryModuleView: React.FC = () => {
   const { user } = useAuth();
@@ -46,6 +49,16 @@ export const EPPDeliveryModuleView: React.FC = () => {
   const [inspectDelivery, setInspectDelivery] = useState<EntregaEPPMGRecord | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
+  // Apps Script connection modal & state
+  const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
+  const [isAppsScriptConnected, setIsAppsScriptConnected] = useState(() =>
+    googleDriveService.isAppsScriptConfigured()
+  );
+
+  // Delete confirmation modal state (replaces window.confirm blocked in iframes)
+  const [deleteTarget, setDeleteTarget] = useState<EntregaEPPMGRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Sync sede if user changes or mounts
   useEffect(() => {
     if (user && user.role !== 'admin' && user.siteId) {
@@ -65,9 +78,24 @@ export const EPPDeliveryModuleView: React.FC = () => {
     const handleDataChange = () => {
       loadDeliveries();
     };
+    const handleScriptUpdate = () => {
+      setIsAppsScriptConnected(googleDriveService.isAppsScriptConfigured());
+    };
 
     window.addEventListener('mg-sst-data-change', handleDataChange);
-    return () => window.removeEventListener('mg-sst-data-change', handleDataChange);
+    window.addEventListener('mg-sst-apps-script-updated', handleScriptUpdate);
+
+    // Auto-sync silently on mount when Apps Script URL is configured
+    if (googleDriveService.isAppsScriptConfigured()) {
+      googleDriveService.syncFromAppsScript().then((res) => {
+        if (res.success) loadDeliveries();
+      }).catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener('mg-sst-data-change', handleDataChange);
+      window.removeEventListener('mg-sst-apps-script-updated', handleScriptUpdate);
+    };
   }, []);
 
   // Filter deliveries according to user role, sede, and search
@@ -120,24 +148,52 @@ export const EPPDeliveryModuleView: React.FC = () => {
   };
 
   const handleDelete = (delivery: EntregaEPPMGRecord) => {
-    if (window.confirm(`¿Está seguro de eliminar el registro ${delivery.Id_Epp} de ${delivery.Nombre}?`)) {
-      if (user) {
-        storageService.deleteEntregaEPPRecord(delivery.id || delivery.Id_Epp, {
-          email: user.email,
-          name: user.displayName,
-        });
-        showNotification('success', `Registro ${delivery.Id_Epp} eliminado de la hoja Entrega Epp´s MG.`);
+    setDeleteTarget(delivery);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !user) return;
+    setIsDeleting(true);
+    try {
+      storageService.deleteEntregaEPPRecord(deleteTarget.id || deleteTarget.Id_Epp, {
+        email: user.email,
+        name: user.displayName,
+      });
+
+      if (googleDriveService.isAppsScriptConfigured()) {
+        const driveRes = await googleDriveService.deleteEntregaEPPRecordFromDrive(deleteTarget.Id_Epp);
+        loadDeliveries();
+        if (driveRes.success) {
+          showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado del sistema y de Entrega Epp´s MG.`);
+        } else {
+          showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado localmente. (${driveRes.message})`);
+        }
+      } else {
+        loadDeliveries();
+        showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado.`);
       }
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
 
-  const handleSave = (record: EntregaEPPMGRecord) => {
+  const handleSave = (
+    record: EntregaEPPMGRecord,
+    driveSyncResult?: { success: boolean; message: string; needsConfig?: boolean }
+  ) => {
     if (user) {
       storageService.saveEntregaEPPRecord(record, { email: user.email, name: user.displayName });
       setIsModalOpen(false);
-      showNotification('success', `Registro ${record.Id_Epp} guardado en la hoja Entrega Epp´s MG.`);
+      if (driveSyncResult?.success) {
+        showNotification('success', `Registro ${record.Id_Epp} guardado localmente y sincronizado en Entrega Epp´s MG (Drive).`);
+      } else if (driveSyncResult && !driveSyncResult.success) {
+        showNotification('error', driveSyncResult.message);
+      } else {
+        showNotification('success', `Registro ${record.Id_Epp} guardado en la hoja Entrega Epp´s MG.`);
+      }
     }
   };
 
@@ -145,18 +201,15 @@ export const EPPDeliveryModuleView: React.FC = () => {
     setIsSyncingDrive(true);
     try {
       const result = await googleDriveService.fetchDeliveriesFromDrive();
-      if (result.success && result.records.length > 0) {
-        // Merge with existing local records
-        result.records.forEach((rec) => {
-          storageService.saveEntregaEPPRecord(rec, {
-            email: user?.email || 'admin@mgconsultores.com',
-            name: 'Google Drive Sync',
-          });
-        });
+      if (result.needsConfig) {
+        setIsScriptModalOpen(true);
+        showNotification('error', result.message);
+      } else if (result.success) {
+        storageService.syncDeliveriesFromRemote(result.records);
         loadDeliveries();
         showNotification('success', result.message);
       } else {
-        showNotification(result.success ? 'success' : 'error', result.message);
+        showNotification('error', result.message);
       }
     } catch (err: any) {
       showNotification('error', `Error al conectar con Drive: ${err.message}`);
@@ -169,7 +222,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
     setNotification({ type, message });
     setTimeout(() => {
       setNotification(null);
-    }, 4000);
+    }, 5000);
   };
 
   const handleExportPDF = (delivery: EntregaEPPMGRecord) => {
@@ -180,65 +233,6 @@ export const EPPDeliveryModuleView: React.FC = () => {
   const handleExportExcel = () => {
     exportService.exportEntregaEPPMGToExcel(filteredDeliveries, 'Entrega_Epps_MG');
     showNotification('success', 'Archivo Excel exportado con la hoja Entrega Epp´s MG y sus 19 campos.');
-  };
-
-  const handleExportCSV = () => {
-    const headers = [
-      'Id_Epp',
-      'Fecha',
-      'Año',
-      'Mes',
-      'Sede',
-      'Cédula',
-      'Nombre',
-      'Labor',
-      'Area',
-      'Supervisor',
-      'Código Epp',
-      'Epp',
-      'Tipo_Entrega',
-      'Costo',
-      'Estado',
-      'Foto_Entrega',
-      'Firma_Trabajador',
-      'Responsable SST',
-      'Firma SST',
-    ];
-
-    const csvRows = filteredDeliveries.map((d) =>
-      [
-        `"${d.Id_Epp}"`,
-        `"${d.Fecha}"`,
-        `"${d.Año}"`,
-        `"${d.Mes}"`,
-        `"${d.Sede}"`,
-        `"${d.Cédula}"`,
-        `"${d.Nombre}"`,
-        `"${d.Labor}"`,
-        `"${d.Area}"`,
-        `"${d.Supervisor}"`,
-        `"${d.Código_Epp}"`,
-        `"${d.Epp}"`,
-        `"${d.Tipo_Entrega}"`,
-        d.Costo,
-        `"${d.Estado}"`,
-        `"${d.Foto_Entrega ? 'Foto Adjunta' : 'Sin Foto'}"`,
-        `"${d.Firma_Trabajador ? 'Firmado' : 'Pendiente'}"`,
-        `"${d.Responsable_SST}"`,
-        `"${d.Firma_SST ? 'Firmado' : 'Pendiente'}"`,
-      ].join(',')
-    );
-
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Entrega_Epps_MG_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification('success', 'Archivo CSV de Entrega Epp´s MG exportado exitosamente.');
   };
 
   return (
@@ -259,22 +253,9 @@ export const EPPDeliveryModuleView: React.FC = () => {
             <Shield className="w-7 h-7 text-[#E60000]" />
             Entrega Epp´s MG
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Formulario y hoja de registro oficial con los 19 campos reglamentarios y costos vinculados a la hoja <span className="font-bold text-slate-700">Epp´s</span>
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <a
-            href={TARGET_ENTREGA_EPP_SPREADSHEET.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-[#0A2958] rounded-xl text-xs font-bold transition-colors border border-blue-200 shadow-xs"
-            title="Abrir hoja de cálculo oficial en Google Drive"
-          >
-            <ExternalLink className="w-4 h-4 text-blue-600" />
-            <span>Hoja en Drive</span>
-          </a>
 
           <button
             onClick={handleSyncDrive}
@@ -296,21 +277,25 @@ export const EPPDeliveryModuleView: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setIsScriptModalOpen(true)}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shadow-xs cursor-pointer ${
+              isAppsScriptConnected
+                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+            }`}
+            title="Ver Script de Google Apps Script y configurar conexión automática con Entrega Epp´s MG"
+          >
+            <Code2 className={`w-4 h-4 ${isAppsScriptConnected ? 'text-emerald-600' : 'text-amber-600'}`} />
+            <span>{isAppsScriptConnected ? 'Drive Conectado' : 'Script Conexión Drive'}</span>
+          </button>
+
+          <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-colors border border-emerald-300 shadow-xs"
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-colors border border-emerald-300 shadow-xs cursor-pointer"
             title="Exportar archivo Excel (.xlsx) con hoja 'Entrega Epp´s MG'"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>Exportar Excel</span>
-          </button>
-
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors border border-slate-300"
-            title="Exportar archivo CSV con los 19 campos"
-          >
-            <FileDown className="w-4 h-4 text-slate-600" />
-            <span>CSV</span>
           </button>
 
           <button
@@ -418,7 +403,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
                 <option value="TODAS">🏢 Todas las Sedes (Admin General)</option>
                 {sedes.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.id} - {s.nombre}
+                    {s.id}
                   </option>
                 ))}
               </select>
@@ -841,6 +826,63 @@ export const EPPDeliveryModuleView: React.FC = () => {
         onSave={handleSave}
         editingDelivery={editingDelivery}
       />
+
+      {/* Apps Script Connection Modal */}
+      <AppsScriptConnectionModal
+        isOpen={isScriptModalOpen}
+        onClose={() => setIsScriptModalOpen(false)}
+        onConnected={(msg) => {
+          setIsAppsScriptConnected(true);
+          loadDeliveries();
+          showNotification('success', msg);
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-red-50 border-b border-red-100 p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-red-900">Confirmar Eliminación</h3>
+                <p className="text-[11px] text-red-700">Esta acción eliminará el registro seleccionado.</p>
+              </div>
+            </div>
+            <div className="p-5 text-xs text-slate-700 space-y-2">
+              <p>
+                ¿Está seguro de eliminar el registro <span className="font-mono font-bold text-[#0A2958]">{deleteTarget.Id_Epp}</span> de{' '}
+                <span className="font-bold text-slate-900">{deleteTarget.Nombre}</span>?
+              </p>
+              {isAppsScriptConnected && (
+                <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  También se eliminará la fila correspondiente en la hoja <strong>Entrega Epp´s</strong> de Google Drive.
+                </p>
+              )}
+            </div>
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-[#E60000] hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
+              >
+                {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
