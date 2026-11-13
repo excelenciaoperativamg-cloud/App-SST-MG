@@ -266,7 +266,10 @@ function readAppSstMgData_() {
       const idxCed = mHeaders.findIndex(function (h) { return h.indexOf('cedula') !== -1 || h.indexOf('documento') !== -1 || h.indexOf('identificacion') !== -1; });
       const idxNom = mHeaders.findIndex(function (h) { return h.indexOf('nombre') !== -1; });
       const idxSede = mHeaders.findIndex(function (h) { return h.indexOf('sede') !== -1; });
-      const idxCargo = mHeaders.findIndex(function (h) { return h.indexOf('labor') !== -1 || h.indexOf('cargo') !== -1 || h.indexOf('puesto') !== -1; });
+      let idxCargo = mHeaders.findIndex(function (h) { return h === 'cargo' || h.indexOf('cargo') !== -1; });
+      let idxPuesto = mHeaders.findIndex(function (h) { return h === 'puesto' || h === 'labor' || h.indexOf('puesto') !== -1 || h.indexOf('labor') !== -1; });
+      if (idxCargo === -1) idxCargo = idxPuesto;
+      if (idxPuesto === -1) idxPuesto = idxCargo;
       const idxArea = mHeaders.findIndex(function (h) { return h.indexOf('area') !== -1; });
       const idxSup = mHeaders.findIndex(function (h) { return h.indexOf('supervisor') !== -1; });
       const idxEst = mHeaders.findIndex(function (h) { return h.indexOf('estado') !== -1; });
@@ -277,12 +280,16 @@ function readAppSstMgData_() {
         const nombre = String(row[idxNom !== -1 ? idxNom : 1] || '').trim();
         if (!cedula || !nombre) continue;
 
+        const cargoVal = idxCargo !== -1 ? String(row[idxCargo] || '').trim() : '';
+        const puestoVal = idxPuesto !== -1 ? String(row[idxPuesto] || '').trim() : cargoVal;
+
         output.maestro.push({
           id: cedula,
           cedula: cedula,
           nombre: nombre,
           sedeId: idxSede !== -1 ? String(row[idxSede] || 'MG-HA').trim() : 'MG-HA',
-          puesto: idxCargo !== -1 ? String(row[idxCargo] || '').trim() : '',
+          puesto: puestoVal || cargoVal,
+          cargo: cargoVal || puestoVal,
           area: idxArea !== -1 ? String(row[idxArea] || '').trim() : '',
           supervisor: idxSup !== -1 ? String(row[idxSup] || '').trim() : '',
           estado: idxEst !== -1 && String(row[idxEst]).toUpperCase().indexOf('INACTIVO') !== -1 ? 'INACTIVO' : 'ACTIVO',

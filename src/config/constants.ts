@@ -36,13 +36,12 @@ export const INITIAL_SEDES: Sede[] = [
 ];
 
 export const INITIAL_SUPERVISORES: Supervisor[] = [
-  { id: 'sup-1', sedeId: 'MG-MG', area: 'Operaciones', supervisor: 'Carlos Mario Restrepo', cargo: 'Supervisor Operativo', telefono: '3104501122' },
-  { id: 'sup-2', sedeId: 'MG-MG', area: 'Mantenimiento', supervisor: 'Andrés Felipe Gómez', cargo: 'Líder Técnico', telefono: '3128904321' },
-  { id: 'sup-3', sedeId: 'MG-HA', area: 'Producción', supervisor: 'María Eugenia Salazar', cargo: 'Supervisora de Planta', telefono: '3146709823' },
-  { id: 'sup-4', sedeId: 'MG-HA', area: 'Logística', supervisor: 'Juan David Correa', cargo: 'Coordinador Logístico', telefono: '3187654320' },
-  { id: 'sup-5', sedeId: 'MG-SC', area: 'Almacén', supervisor: 'Guillermo León Vélez', cargo: 'Supervisor Almacén', telefono: '3156678912' },
-  { id: 'sup-6', sedeId: 'MG-JA', area: 'Servicios Generales', supervisor: 'Martha Lucía Henao', cargo: 'Líder de Servicios', telefono: '3112233445' },
-  { id: 'sup-7', sedeId: 'MG-ER', area: 'Seguridad Física', supervisor: 'Jorge Eliécer Mora', cargo: 'Coordinador de Seguridad', telefono: '3209988776' },
+  { id: 'sup-real-1', sedeId: 'MG-HA', area: 'MIPE', supervisor: 'JERSSON SUAREZ', cargo: 'SUPERVISOR' },
+  { id: 'sup-real-2', sedeId: 'MG-HA', area: 'GYPSO', supervisor: 'JULIO LOPEZ', cargo: 'SUPERVISOR' },
+  { id: 'sup-real-3', sedeId: 'MG-HA', area: 'POSCOSECHA', supervisor: 'LEYSLA RODRIGUEZ', cargo: 'SUPERVISOR' },
+  { id: 'sup-real-4', sedeId: 'MG-HA', area: 'F3', supervisor: 'ANDREA FINO', cargo: 'SUPERVISOR' },
+  { id: 'sup-real-5', sedeId: 'MG-HA', area: 'F2', supervisor: 'YULIETH ESCOBAR', cargo: 'SUPERVISOR' },
+  { id: 'sup-real-6', sedeId: 'MG-HA', area: 'F4', supervisor: 'DINA MARTINEZ', cargo: 'SUPERVISOR' },
 ];
 
 export const INITIAL_EPS: EPS[] = [

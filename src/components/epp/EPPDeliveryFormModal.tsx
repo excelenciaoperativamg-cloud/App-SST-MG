@@ -12,6 +12,8 @@ import {
   Camera,
   Trash2,
   Upload,
+  Search,
+  ChevronDown,
 } from 'lucide-react';
 import {
   EntregaEPPMGRecord,
@@ -28,6 +30,7 @@ import { PersonnelWorker } from '../../types';
 import { storageService } from '../../services/storageService';
 import { googleDriveService } from '../../services/googleDriveService';
 import { useAuth } from '../../context/AuthContext';
+import { useSST } from '../../context/SSTContext';
 import { SignaturePad } from '../common/SignaturePad';
 
 interface EPPDeliveryFormModalProps {
@@ -47,34 +50,46 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   editingDelivery,
 }) => {
   const { user } = useAuth();
-  const sedes = storageService.getSedes();
-  const supervisores = storageService.getSupervisores();
-  const workers = storageService.getWorkers();
+  const { workers, supervisores, sedes } = useSST();
   const eppCatalog = storageService.getEPPCatalog();
   const laboresCatalog = storageService.getLabores();
   const areasCatalog = storageService.getAreas();
   const tiposEntregaCatalog = storageService.getTiposEntrega();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const supervisorContainerRef = useRef<HTMLDivElement>(null);
+  const eppContainerRef = useRef<HTMLDivElement>(null);
 
-  // Extraer del maestro los trabajadores que tienen cargo como supervisor + lista oficial
+  const normalizeSearch = (val: string) =>
+    String(val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+
+  // Extraer del Maestro los trabajadores que en la columna Cargo registran como Supervisor
   const supervisoresMaestro = useMemo(() => {
     const fromWorkers = workers
       .filter((w) => {
-        const puesto = (w.puesto || '').toUpperCase();
-        const cargo = ((w as any).cargo || '').toUpperCase();
-        return puesto.includes('SUPERVISOR') || cargo.includes('SUPERVISOR');
+        if (w.estado === 'INACTIVO') return false;
+        const cargoCol = (w.cargo || w.puesto || '').toUpperCase();
+        return cargoCol.includes('SUPERVISOR');
       })
-      .map((w) => w.nombre.trim());
+      .map((w) => w.nombre.trim())
+      .filter(Boolean);
 
-    const fromSupervisores = supervisores.map((s) => s.supervisor.trim());
-    const fromSheet = CATALOGO_SUPERVISORES.map((s) => s.trim());
+    const uniqueFromWorkers = Array.from(new Set(fromWorkers)).sort((a, b) =>
+      a.localeCompare(b)
+    );
 
-    const combined = Array.from(new Set([...fromWorkers, ...fromSupervisores, ...fromSheet]))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
+    if (uniqueFromWorkers.length > 0) {
+      return uniqueFromWorkers;
+    }
 
-    return combined.length > 0 ? combined : CATALOGO_SUPERVISORES;
+    const fromSupervisores = supervisores.map((s) => s.supervisor.trim()).filter(Boolean);
+    return Array.from(new Set([...fromSupervisores, ...CATALOGO_SUPERVISORES])).sort((a, b) =>
+      a.localeCompare(b)
+    );
   }, [workers, supervisores]);
 
   // Selected sede default
@@ -103,16 +118,19 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const [isCustomLabor, setIsCustomLabor] = useState(false);
   // 9. Area (Opciones de la hoja Area)
   const [area, setArea] = useState(areasCatalog[0] || CATALOGO_AREAS[0] || 'MIPE');
-  // 10. Supervisor (Lista de supervisores del maestro)
-  const [supervisor, setSupervisor] = useState(CATALOGO_SUPERVISORES[0] || 'JERSSON SUAREZ');
-  // 11. Código Epp (Solo el código)
-  const [codigoEpp, setCodigoEpp] = useState(eppCatalog[0]?.codigoEpp || CATALOGO_EPPS[0]?.codigoEpp || '7PRGUA47');
+  // 10. Supervisor (Lista de supervisores del maestro, sin valor preseleccionado al abrir)
+  const [supervisor, setSupervisor] = useState('');
+  const [isSupervisorOpen, setIsSupervisorOpen] = useState(false);
+  // 11. Código Epp (Solo el código, con buscador)
+  const [codigoEpp, setCodigoEpp] = useState('');
+  const [eppSearch, setEppSearch] = useState('');
+  const [isEppOpen, setIsEppOpen] = useState(false);
   // 12. Epp (Nombre del Epp traído automáticamente de la hoja Epp´s)
-  const [epp, setEpp] = useState(eppCatalog[0]?.epp || CATALOGO_EPPS[0]?.epp || 'GUANTE CAUCHO CAL 55 NO.9');
+  const [epp, setEpp] = useState('');
   // 13. Tipo_Entrega (Opciones de la hoja Tipo_Entrega)
   const [tipoEntrega, setTipoEntrega] = useState(tiposEntregaCatalog[0] || CATALOGO_TIPO_ENTREGA[0] || 'REPOSICIÓN');
   // 14. Costo (Costo oficial de la hoja Epp´s)
-  const [costo, setCosto] = useState<number>(eppCatalog[0]?.costo || CATALOGO_EPPS[0]?.costo || 10544);
+  const [costo, setCosto] = useState<number>(0);
   // 15. Estado
   const [estado, setEstado] = useState<'Entregado y Firmado' | 'Pendiente de Firma' | 'Borrador'>('Entregado y Firmado');
   // 16. Foto_Entrega
@@ -129,6 +147,42 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const [matchedWorker, setMatchedWorker] = useState<PersonnelWorker | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [driveSyncing, setDriveSyncing] = useState(false);
+
+  // Cerrar desplegables al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        supervisorContainerRef.current &&
+        !supervisorContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsSupervisorOpen(false);
+      }
+      if (
+        eppContainerRef.current &&
+        !eppContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsEppOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredSupervisores = useMemo(() => {
+    const q = normalizeSearch(supervisor);
+    if (!q) return supervisoresMaestro;
+    return supervisoresMaestro.filter((sup) => normalizeSearch(sup).includes(q));
+  }, [supervisoresMaestro, supervisor]);
+
+  const filteredEpps = useMemo(() => {
+    const q = normalizeSearch(eppSearch);
+    if (!q) return eppCatalog;
+    return eppCatalog.filter(
+      (item) =>
+        normalizeSearch(item.codigoEpp).includes(q) ||
+        normalizeSearch(item.epp).includes(q)
+    );
+  }, [eppCatalog, eppSearch]);
 
   // Update Año and Mes internally whenever Fecha changes
   const handleFechaChange = (newFecha: string) => {
@@ -191,10 +245,18 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const handleEppCodeChange = (selectedCodigo: string) => {
     const cleanCode = selectedCodigo.split(' - ')[0].trim();
     setCodigoEpp(cleanCode);
-    const item = eppCatalog.find((c) => c.codigoEpp === cleanCode) || CATALOGO_EPPS.find((c) => c.codigoEpp === cleanCode);
+    setEppSearch(cleanCode);
+    const item =
+      eppCatalog.find((c) => c.codigoEpp.toUpperCase() === cleanCode.toUpperCase()) ||
+      CATALOGO_EPPS.find((c) => c.codigoEpp.toUpperCase() === cleanCode.toUpperCase());
     if (item) {
+      setCodigoEpp(item.codigoEpp);
+      setEppSearch(item.codigoEpp);
       setEpp(item.epp);
       setCosto(item.costo); // Costo automático de la hoja Epp´s
+    } else {
+      setEpp('');
+      setCosto(0);
     }
   };
 
@@ -210,15 +272,19 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setNombre(editingDelivery.Nombre);
       setLabor(editingDelivery.Labor || CATALOGO_LABORES[0]);
       setArea(editingDelivery.Area || CATALOGO_AREAS[0]);
-      setSupervisor(editingDelivery.Supervisor || CATALOGO_SUPERVISORES[0]);
-      setCodigoEpp(editingDelivery.Código_Epp || CATALOGO_EPPS[0].codigoEpp);
-      setEpp(editingDelivery.Epp || CATALOGO_EPPS[0].epp);
+      setSupervisor(editingDelivery.Supervisor || '');
+      const existingCode = (editingDelivery.Código_Epp || '').split(' - ')[0].trim();
+      setCodigoEpp(existingCode);
+      setEppSearch(existingCode);
+      setEpp(editingDelivery.Epp || '');
+      setCosto(Number(editingDelivery.Costo) || 0);
       setTipoEntrega(editingDelivery.Tipo_Entrega || CATALOGO_TIPO_ENTREGA[0]);
       setEstado(
         (editingDelivery.Estado === 'Pendiente de Firma' || editingDelivery.Estado === 'Borrador')
           ? editingDelivery.Estado
           : 'Entregado y Firmado'
       );
+      setFotoEntrega(editingDelivery.Foto_Entrega || '');
       setFirmaTrabajador(editingDelivery.Firma_Trabajador || '');
       setResponsableSST(editingDelivery.Responsable_SST || user?.displayName || 'Responsable SST');
       setFirmaSST(editingDelivery.Firma_SST || '');
@@ -243,12 +309,11 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setNombre('');
       setLabor(CATALOGO_LABORES[0] || 'MIPE');
       setArea(CATALOGO_AREAS[0] || 'MIPE');
-      setSupervisor(CATALOGO_SUPERVISORES[0] || 'JERSSON SUAREZ');
-
-      const firstEpp = CATALOGO_EPPS[0];
-      setCodigoEpp(firstEpp.codigoEpp);
-      setEpp(firstEpp.epp);
-      setCosto(firstEpp.costo);
+      setSupervisor('');
+      setCodigoEpp('');
+      setEppSearch('');
+      setEpp('');
+      setCosto(0);
 
       setTipoEntrega(CATALOGO_TIPO_ENTREGA[0] || 'REPOSICIÓN');
       setEstado('Entregado y Firmado');
@@ -259,6 +324,8 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setObservaciones('');
       setMatchedWorker(null);
     }
+    setIsSupervisorOpen(false);
+    setIsEppOpen(false);
     setError(null);
   }, [editingDelivery, isOpen]);
 
@@ -291,8 +358,13 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       return;
     }
 
+    if (!supervisor.trim()) {
+      setError('Por favor busque y seleccione el supervisor a cargo.');
+      return;
+    }
+
     if (!codigoEpp || !epp) {
-      setError('Por favor seleccione el código EPP.');
+      setError('Por favor busque y seleccione un código EPP válido de la hoja Epp´s.');
       return;
     }
 
@@ -584,23 +656,83 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
               </div>
             </div>
 
-            {/* 10. Supervisor (Traer del maestro los que tienen cargo como supervisor) */}
-            <div className="pt-1">
+            {/* 10. Supervisor (Listado del Maestro con Cargo = Supervisor + cuadro de búsqueda) */}
+            <div className="pt-1 relative" ref={supervisorContainerRef}>
               <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span>10. Supervisor a Cargo *</span>
-                <span className="text-[9px] text-emerald-700 font-bold">Supervisores del Maestro</span>
+                <span className="text-[9px] text-emerald-700 font-bold">
+                  Maestro Cargo: Supervisor ({supervisoresMaestro.length})
+                </span>
               </label>
-              <select
-                value={supervisor}
-                onChange={(e) => setSupervisor(e.target.value)}
-                className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
-              >
-                {supervisoresMaestro.map((sup) => (
-                  <option key={sup} value={sup}>
-                    {sup}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={supervisor}
+                  onFocus={() => setIsSupervisorOpen(true)}
+                  onChange={(e) => {
+                    setSupervisor(e.target.value);
+                    setIsSupervisorOpen(true);
+                  }}
+                  placeholder="Buscar supervisor en el Maestro..."
+                  className="w-full pl-9 pr-14 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+                  autoComplete="off"
+                  required
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {supervisor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSupervisor('');
+                        setIsSupervisorOpen(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                      title="Limpiar supervisor"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsSupervisorOpen((prev) => !prev)}
+                    className="p-1 text-slate-400 hover:text-[#0A2958] rounded"
+                    title="Mostrar lista de supervisores"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {isSupervisorOpen && (
+                <div className="absolute left-0 right-0 z-30 mt-1 bg-white border border-slate-300 rounded-xl shadow-lg max-h-52 overflow-y-auto divide-y divide-slate-100">
+                  {filteredSupervisores.length === 0 ? (
+                    <div className="px-3 py-2.5 text-xs text-slate-500">
+                      No se encontraron supervisores que coincidan con "{supervisor}".
+                    </div>
+                  ) : (
+                    filteredSupervisores.map((sup) => (
+                      <button
+                        key={sup}
+                        type="button"
+                        onClick={() => {
+                          setSupervisor(sup);
+                          setIsSupervisorOpen(false);
+                          setError(null);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-blue-50 transition-colors ${
+                          supervisor.toUpperCase() === sup.toUpperCase()
+                            ? 'bg-blue-50/80 text-[#0A2958] font-bold'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        <span>{sup}</span>
+                        <span className="text-[10px] text-emerald-700 font-medium">SUPERVISOR</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -617,23 +749,108 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3">
-              {/* 11. Código Epp (Tomar códigos de la hoja Epp´s) */}
-              <div className="md:col-span-4">
+              {/* 11. Código Epp (Cuadro con buscador por código o descripción) */}
+              <div className="md:col-span-4 relative" ref={eppContainerRef}>
                 <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
                   <span>11. Código Epp *</span>
-                  <span className="text-[9px] text-blue-700 font-bold">Solo Código</span>
+                  <span className="text-[9px] text-blue-700 font-bold">Buscar Código o EPP</span>
                 </label>
-                <select
-                  value={codigoEpp}
-                  onChange={(e) => handleEppCodeChange(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-[#0A2958] font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
-                >
-                  {eppCatalog.map((cat) => (
-                    <option key={cat.codigoEpp} value={cat.codigoEpp}>
-                      {cat.codigoEpp} - {cat.epp}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={eppSearch}
+                    onFocus={() => setIsEppOpen(true)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEppSearch(val);
+                      setIsEppOpen(true);
+                      const exactMatch =
+                        eppCatalog.find(
+                          (c) => c.codigoEpp.toUpperCase() === val.trim().toUpperCase()
+                        ) ||
+                        CATALOGO_EPPS.find(
+                          (c) => c.codigoEpp.toUpperCase() === val.trim().toUpperCase()
+                        );
+                      if (exactMatch) {
+                        setCodigoEpp(exactMatch.codigoEpp);
+                        setEpp(exactMatch.epp);
+                        setCosto(exactMatch.costo);
+                      } else {
+                        setCodigoEpp('');
+                        setEpp('');
+                        setCosto(0);
+                      }
+                    }}
+                    placeholder="Buscar código o nombre de EPP..."
+                    className="w-full pl-9 pr-14 py-2 bg-white border border-slate-300 rounded-lg text-[#0A2958] font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+                    autoComplete="off"
+                    required
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {eppSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEppSearch('');
+                          setCodigoEpp('');
+                          setEpp('');
+                          setCosto(0);
+                          setIsEppOpen(true);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                        title="Limpiar código EPP"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsEppOpen((prev) => !prev)}
+                      className="p-1 text-slate-400 hover:text-[#0A2958] rounded"
+                      title="Mostrar catálogo de EPP"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {isEppOpen && (
+                  <div className="absolute left-0 right-0 md:w-[440px] z-30 mt-1 bg-white border border-slate-300 rounded-xl shadow-xl max-h-60 overflow-y-auto divide-y divide-slate-100">
+                    {filteredEpps.length === 0 ? (
+                      <div className="px-3 py-2.5 text-xs text-slate-500">
+                        No hay EPP que coincidan con "{eppSearch}".
+                      </div>
+                    ) : (
+                      filteredEpps.map((cat) => (
+                        <button
+                          key={cat.codigoEpp}
+                          type="button"
+                          onClick={() => {
+                            handleEppCodeChange(cat.codigoEpp);
+                            setIsEppOpen(false);
+                            setError(null);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 hover:bg-blue-50 transition-colors ${
+                            codigoEpp === cat.codigoEpp ? 'bg-blue-50/80' : ''
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="inline-block font-mono font-bold text-[#0A2958] bg-slate-100 px-1.5 py-0.5 rounded mr-2">
+                              {cat.codigoEpp}
+                            </span>
+                            <span className="font-semibold text-slate-700 break-words">
+                              {cat.epp}
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-emerald-700 shrink-0">
+                            {formatCOP(cat.costo)}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 12. Epp (Nombre traído de la hoja Epp´s) */}

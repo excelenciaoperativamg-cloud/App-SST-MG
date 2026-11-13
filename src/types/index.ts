@@ -65,6 +65,7 @@ export interface PersonnelWorker {
   sedeId: string;
   fechaIngreso: string;
   puesto: string;
+  cargo?: string;
   area?: string;
   supervisor?: string;
   eps?: string;

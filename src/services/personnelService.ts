@@ -114,7 +114,8 @@ export const personnelService = {
             const generoRaw = getVal(['Género', 'Genero', 'Sexo']).toUpperCase();
             const sede = getVal(['Sede', 'SedeId', 'Centro de Trabajo']);
             const fechaIngreso = getVal(['Fecha de ingreso', 'Fecha Ingreso', 'F. Ingreso', 'Ingreso']);
-            const puesto = getVal(['Puesto', 'Cargo', 'Ocupación', 'Ocupacion']);
+            const puesto = getVal(['Puesto', 'Labor', 'Cargo', 'Ocupación', 'Ocupacion']);
+            const cargo = getVal(['Cargo', 'Puesto', 'Ocupación', 'Ocupacion']);
             const eps = getVal(['EPS', 'Entidad de Salud']);
             const arl = getVal(['ARL', 'Aseguradora de Riesgos']);
 
@@ -174,7 +175,8 @@ export const personnelService = {
               genero,
               sedeId: sede || 'MG-MG',
               fechaIngreso: fechaIngreso || now.split('T')[0],
-              puesto: puesto || 'Operario',
+              puesto: puesto || cargo || 'Operario',
+              cargo: cargo || puesto || undefined,
               eps: eps || undefined,
               arl: arl || undefined,
               estado: 'ACTIVO',

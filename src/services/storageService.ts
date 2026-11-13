@@ -621,58 +621,26 @@ const SEED_WORKERS: PersonnelWorker[] = [
     createdAt: '2020-04-10T08:00:00.000Z',
     updatedAt: '2026-01-10T09:00:00.000Z',
   },
-  // Trabajadores adicionales de otras sedes
-  {
-    id: '1017123456',
-    cedula: '1017123456',
-    nombre: 'Mateo Arango Jaramillo',
-    fechaNacimiento: '1992-05-14',
-    edad: 34,
-    genero: 'M',
-    sedeId: 'MG-MG',
-    fechaIngreso: '2021-03-15',
-    puesto: 'MANTENIMIENTO',
-    eps: 'SURA EPS',
-    arl: 'ARL SURA',
-    estado: 'ACTIVO',
-    createdAt: '2021-03-15T08:00:00.000Z',
-    updatedAt: '2026-01-10T09:00:00.000Z',
-  },
-  {
-    id: '1020456789',
-    cedula: '1020456789',
-    nombre: 'Laura Camila Restrepo Morales',
-    fechaNacimiento: '1995-11-20',
-    edad: 31,
-    genero: 'F',
-    sedeId: 'MG-HA',
-    fechaIngreso: '2022-06-01',
-    puesto: 'BONCHADOR',
-    eps: 'Sanitas EPS',
-    arl: 'ARL SURA',
-    estado: 'ACTIVO',
-    createdAt: '2022-06-01T08:00:00.000Z',
-    updatedAt: '2026-01-10T09:00:00.000Z',
-  },
-  {
-    id: '1035678901',
-    cedula: '1035678901',
-    nombre: 'Juan Pablo Zapata Ochoa',
-    fechaNacimiento: '1988-08-04',
-    edad: 38,
-    genero: 'M',
-    sedeId: 'MG-SC',
-    fechaIngreso: '2019-11-10',
-    puesto: 'ALMACEN',
-    eps: 'Compensar EPS',
-    arl: 'Positiva Compañía de Seguros',
-    estado: 'ACTIVO',
-    createdAt: '2019-11-10T08:00:00.000Z',
-    updatedAt: '2026-01-10T09:00:00.000Z',
-  },
 ];
 
-// Initial SST Records for demonstration
+const LEGACY_FAKE_WORKER_CEDULAS = new Set(['1017123456', '1020456789', '1035678901']);
+const LEGACY_FAKE_SUPERVISOR_IDS = new Set(['sup-1', 'sup-2', 'sup-3', 'sup-4', 'sup-5', 'sup-6', 'sup-7']);
+const LEGACY_FAKE_SUPERVISOR_NAMES = new Set([
+  'CARLOS MARIO RESTREPO',
+  'ANDRÉS FELIPE GÓMEZ',
+  'ANDRES FELIPE GOMEZ',
+  'MARÍA EUGENIA SALAZAR',
+  'MARIA EUGENIA SALAZAR',
+  'JUAN DAVID CORREA',
+  'GUILLERMO LEÓN VÉLEZ',
+  'GUILLERMO LEON VELEZ',
+  'MARTHA LUCÍA HENAO',
+  'MARTHA LUCIA HENAO',
+  'JORGE ELIÉCER MORA',
+  'JORGE ELIECER MORA',
+]);
+
+// Initial SST Records for demonstration (real company names only)
 const SEED_RECORDS: SSTRecord[] = [
   {
     id: 'rec-2026-001',
@@ -683,23 +651,15 @@ const SEED_RECORDS: SSTRecord[] = [
     subModuloNombre: 'Extintores',
     fecha: '2026-02-15',
     sedeId: 'MG-MG',
-    area: 'Mantenimiento',
-    supervisor: 'Andrés Felipe Gómez',
-    responsableRegistro: 'Carlos SST Inspector',
+    area: 'MIPE',
+    supervisor: 'JERSSON SUAREZ',
+    responsableRegistro: 'Supervisor SST',
     responsableEmail: 'sst@mgconsultores.com',
     estado: 'CERRADO',
     observaciones: 'Inspección mensual reglamentaria. Extintor multipropósito ABC 20lbs verificado. Presión en verde, pasador y precinto intactos, acceso despejado.',
     hallazgos: 'Todo en conformidad con la norma NFPA 10.',
     accionesPropuestas: 'Mantener señalización visible.',
-    evidencias: [
-      {
-        id: 'ev-1',
-        nombre: 'inspeccion_extintor_area_mant.jpg',
-        url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=400&q=80',
-        tipo: 'image/jpeg',
-        fecha: '2026-02-15',
-      },
-    ],
+    evidencias: [],
     createdAt: '2026-02-15T09:30:00.000Z',
     updatedAt: '2026-02-15T10:00:00.000Z',
     createdBy: 'sst@mgconsultores.com',
@@ -713,67 +673,20 @@ const SEED_RECORDS: SSTRecord[] = [
     subModuloNombre: 'Entrega EPP\'s',
     fecha: '2026-03-01',
     sedeId: 'MG-HA',
-    area: 'Producción',
-    supervisor: 'María Eugenia Salazar',
-    cedulaTrabajador: '1020456789',
-    nombreTrabajador: 'Laura Camila Restrepo Morales',
-    puestoTrabajador: 'Operadora de Planta',
+    area: 'GYPSO',
+    supervisor: 'JULIO LOPEZ',
+    cedulaTrabajador: '125935',
+    nombreTrabajador: 'MEDINA PATIÑO DANIA LINEY',
+    puestoTrabajador: 'CORTE - GYZ',
     responsableRegistro: 'Coordinador SST Sede',
-    responsableEmail: 'sst_hacienda@mgconsultores.com',
+    responsableEmail: 'sst@mgconsultores.com',
     estado: 'CERRADO',
-    observaciones: 'Entrega de dotación de protección personal: Casco dieléctrico con barboquejo, gafas de seguridad antirrayadura y guantes de nitrilo calibre 15.',
-    accionesPropuestas: 'Capacitación en uso y cuidado de EPP.',
+    observaciones: 'Entrega de dotación de protección personal: Guante Kleenguard G40.',
+    accionesPropuestas: 'Seguimiento de reposición.',
     evidencias: [],
     createdAt: '2026-03-01T14:15:00.000Z',
     updatedAt: '2026-03-01T14:30:00.000Z',
-    createdBy: 'sst_hacienda@mgconsultores.com',
-  },
-  {
-    id: 'rec-2026-003',
-    numeroRegistro: 'PESV-2026-088',
-    menuId: '649b9099',
-    subMenuId: 'sub-pesv-1',
-    moduloNombre: 'PESV',
-    subModuloNombre: 'Chequeo Vehículos',
-    fecha: '2026-03-10',
-    sedeId: 'MG-MG',
-    area: 'Operaciones',
-    supervisor: 'Carlos Mario Restrepo',
-    cedulaTrabajador: '1017123456',
-    nombreTrabajador: 'Mateo Arango Jaramillo',
-    puestoTrabajador: 'Técnico de Mantenimiento',
-    responsableRegistro: 'Conductor Operativo',
-    responsableEmail: 'operaciones@mgconsultores.com',
-    estado: 'EN_PROCESO',
-    observaciones: 'Preoperacional de camioneta placa MGX-450. Nivel de refrigerante óptimo, luces altas y bajas operativas. Se detecta desgaste en plumilla limpiaparabrisas derecha.',
-    hallazgos: 'Plumilla derecha requiere reemplazo preventivo.',
-    accionesPropuestas: 'Orden de cambio solicitada al taller autorizado.',
-    evidencias: [],
-    createdAt: '2026-03-10T06:45:00.000Z',
-    updatedAt: '2026-03-10T07:10:00.000Z',
-    createdBy: 'operaciones@mgconsultores.com',
-  },
-  {
-    id: 'rec-2026-004',
-    numeroRegistro: 'COND-2026-005',
-    menuId: 'c9189227',
-    subMenuId: 'sub-per-2',
-    moduloNombre: 'Personal',
-    subModuloNombre: 'Condiciones Inseguras',
-    fecha: '2026-03-18',
-    sedeId: 'MG-SC',
-    area: 'Almacén',
-    supervisor: 'Guillermo León Vélez',
-    responsableRegistro: 'Líder de Bodega',
-    responsableEmail: 'almacen@mgconsultores.com',
-    estado: 'PENDIENTE',
-    observaciones: 'Se evidencia estiba averiada con riesgo de colapso en estantería nivel 3 sector B. Falta delimitación en pasillo principal.',
-    hallazgos: 'Riesgo locativo y mecánico por caída de objetos.',
-    accionesPropuestas: 'Aislar pasillo de inmediato y trasvasar carga a estiba plástica certificada.',
-    evidencias: [],
-    createdAt: '2026-03-18T11:20:00.000Z',
-    updatedAt: '2026-03-18T11:20:00.000Z',
-    createdBy: 'almacen@mgconsultores.com',
+    createdBy: 'sst@mgconsultores.com',
   },
 ];
 
@@ -781,8 +694,79 @@ const SEED_ENTREGA_EPP_MG: EntregaEPPMGRecord[] = [];
 const LEGACY_SEED_EPP_IDS = new Set(['epp-rec-001', 'epp-rec-002', 'epp-rec-003', 'epp-rec-004']);
 
 export const storageService = {
-  // Initialize storage with seeds if empty
+  // Purge legacy demo workers, supervisors, and deliveries from browser cache
+  cleanupLegacyCache() {
+    try {
+      // Remove obsolete old delivery cache key if present
+      localStorage.removeItem('mg_sst_epp_deliveries');
+
+      // Clean cached workers
+      const storedWorkers = localStorage.getItem(KEYS.PERSONNEL);
+      if (storedWorkers) {
+        const parsed: PersonnelWorker[] = JSON.parse(storedWorkers);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula || '').trim())
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
+          }
+        }
+      }
+
+      // Clean cached supervisors
+      const storedSups = localStorage.getItem(KEYS.SUPERVISORES);
+      if (storedSups) {
+        const parsed: Supervisor[] = JSON.parse(storedSups);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (s) =>
+              !LEGACY_FAKE_SUPERVISOR_IDS.has(String(s.id || '').trim()) &&
+              !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(s.supervisor || '').trim().toUpperCase())
+          );
+          if (cleaned.length !== parsed.length) {
+            const next = cleaned.length > 0 ? cleaned : INITIAL_SUPERVISORES;
+            localStorage.setItem(KEYS.SUPERVISORES, JSON.stringify(next));
+          }
+        }
+      }
+
+      // Clean cached SST records containing fake workers/supervisors
+      const storedRecords = localStorage.getItem(KEYS.RECORDS);
+      if (storedRecords) {
+        const parsed: SSTRecord[] = JSON.parse(storedRecords);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (r) =>
+              !LEGACY_FAKE_WORKER_CEDULAS.has(String(r.cedulaTrabajador || '').trim()) &&
+              !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(r.supervisor || '').trim().toUpperCase())
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(KEYS.RECORDS, JSON.stringify(cleaned));
+          }
+        }
+      }
+
+      // Clean legacy seed EPP deliveries
+      const storedDeliveries = localStorage.getItem(KEYS.EPP_DELIVERIES);
+      if (storedDeliveries) {
+        const parsed: EntregaEPPMGRecord[] = JSON.parse(storedDeliveries);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((d) => !LEGACY_SEED_EPP_IDS.has(d.id));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(cleaned));
+          }
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  },
+
+  // Initialize storage with seeds if empty and scrub legacy fake cache entries
   init() {
+    this.cleanupLegacyCache();
+
     if (!localStorage.getItem(KEYS.SEDES)) {
       localStorage.setItem(KEYS.SEDES, JSON.stringify(INITIAL_SEDES));
     }
@@ -814,7 +798,13 @@ export const storageService = {
     try {
       const stored = localStorage.getItem(KEYS.PERSONNEL);
       if (!stored) return SEED_WORKERS;
-      return JSON.parse(stored);
+      const parsed: PersonnelWorker[] = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return SEED_WORKERS;
+      const cleaned = parsed.filter((w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula).trim()));
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
       return SEED_WORKERS;
     }
@@ -893,6 +883,13 @@ export const storageService = {
     this.notify();
   },
 
+  replaceWorkersFromRemote(remoteWorkers: PersonnelWorker[]) {
+    if (!Array.isArray(remoteWorkers) || remoteWorkers.length === 0) return;
+    const cleaned = remoteWorkers.filter((w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula).trim()));
+    localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
+    this.notify();
+  },
+
   markWorkersInactive(
     cedulas: string[],
     auditUser: { email: string; name: string }
@@ -945,7 +942,14 @@ export const storageService = {
     let list: SSTRecord[] = [];
     try {
       const stored = localStorage.getItem(KEYS.RECORDS);
-      list = stored ? JSON.parse(stored) : SEED_RECORDS;
+      const parsed = stored ? JSON.parse(stored) : SEED_RECORDS;
+      list = Array.isArray(parsed)
+        ? parsed.filter(
+            (r) =>
+              !LEGACY_FAKE_WORKER_CEDULAS.has(String(r.cedulaTrabajador || '').trim()) &&
+              !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(r.supervisor || '').trim().toUpperCase())
+          )
+        : SEED_RECORDS;
     } catch {
       list = SEED_RECORDS;
     }
@@ -1314,7 +1318,20 @@ export const storageService = {
   getSupervisores(): Supervisor[] {
     try {
       const stored = localStorage.getItem(KEYS.SUPERVISORES);
-      return stored ? JSON.parse(stored) : INITIAL_SUPERVISORES;
+      if (!stored) return INITIAL_SUPERVISORES;
+      const parsed: Supervisor[] = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return INITIAL_SUPERVISORES;
+      const cleaned = parsed.filter(
+        (s) =>
+          !LEGACY_FAKE_SUPERVISOR_IDS.has(String(s.id || '').trim()) &&
+          !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(s.supervisor || '').trim().toUpperCase())
+      );
+      if (cleaned.length !== parsed.length) {
+        const next = cleaned.length > 0 ? cleaned : INITIAL_SUPERVISORES;
+        localStorage.setItem(KEYS.SUPERVISORES, JSON.stringify(next));
+        return next;
+      }
+      return cleaned;
     } catch {
       return INITIAL_SUPERVISORES;
     }

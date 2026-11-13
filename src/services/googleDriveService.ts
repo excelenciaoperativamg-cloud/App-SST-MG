@@ -675,10 +675,7 @@ export const googleDriveService = {
         storageService.setTiposEntrega(data.tiposEntrega);
       }
       if (Array.isArray(data.maestro) && data.maestro.length > 0) {
-        storageService.bulkUpsertWorkers(data.maestro, {
-          email: 'apps-script@mgconsultores.com',
-          name: 'Sincronización Automática Drive',
-        });
+        storageService.replaceWorkersFromRemote(data.maestro);
       }
       if (Array.isArray(data.usuarios) && data.usuarios.length > 0) {
         const headers = Object.keys(data.usuarios[0]);
