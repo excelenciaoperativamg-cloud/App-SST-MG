@@ -107,7 +107,10 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
     }
   }, [sedeId, area, supervisores]);
 
-  // Handle worker selection from Master
+  const isAdmin = user?.role === 'admin';
+  const lockedSiteId = !isAdmin && user?.siteId && user.siteId !== 'TODAS' ? user.siteId : null;
+
+  // Handle worker selection from Master (scoped by sede for non-admin users)
   const handleWorkerChange = (cedula: string) => {
     setCedulaTrabajador(cedula);
     if (!cedula) {
@@ -115,11 +118,15 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       setPuestoTrabajador('');
       return;
     }
-    const found = workers.find((w) => w.cedula === cedula);
+    const found = workers.find(
+      (w) =>
+        w.cedula === cedula &&
+        (!lockedSiteId || String(w.sedeId || '').trim().toUpperCase() === lockedSiteId.trim().toUpperCase())
+    );
     if (found) {
       setNombreTrabajador(found.nombre);
       setPuestoTrabajador(found.puesto);
-      if (found.sedeId && found.sedeId !== sedeId) {
+      if (isAdmin && found.sedeId && found.sedeId !== sedeId) {
         setSedeId(found.sedeId);
       }
     }
@@ -309,10 +316,10 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
                 id="field-sede"
                 value={sedeId}
                 onChange={(e) => setSedeId(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 focus:ring-2 focus:ring-[#0A2958]"
-                disabled={user?.role === 'site_lead'}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100"
+                disabled={Boolean(lockedSiteId)}
               >
-                {INITIAL_SEDES.map((s) => (
+                {INITIAL_SEDES.filter((s) => !lockedSiteId || s.id === lockedSiteId).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.codigo}
                   </option>
@@ -381,7 +388,11 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
               >
                 <option value="">-- No aplica / Inspección general de área --</option>
                 {workers
-                  .filter((w) => w.estado === 'ACTIVO')
+                  .filter(
+                    (w) =>
+                      w.estado === 'ACTIVO' &&
+                      (!lockedSiteId || String(w.sedeId || '').trim().toUpperCase() === lockedSiteId.trim().toUpperCase())
+                  )
                   .map((w) => (
                     <option key={w.cedula} value={w.cedula}>
                       {w.cedula} - {w.nombre} ({w.puesto})

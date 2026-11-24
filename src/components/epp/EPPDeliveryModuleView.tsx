@@ -28,16 +28,17 @@ import { EPPDeliveryFormModal } from './EPPDeliveryFormModal';
 import { AppsScriptConnectionModal } from './AppsScriptConnectionModal';
 
 export const EPPDeliveryModuleView: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeSiteId, switchSite } = useAuth();
   const sedes = storageService.getSedes();
 
-  // Selected filters
-  const [selectedSede, setSelectedSede] = useState<string>(
-    user?.role === 'admin' ? 'TODAS' : user?.siteId || 'MG-MG'
-  );
+  // Selected filters (for admin, directly synchronized with Header activeSiteId)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEstado, setSelectedEstado] = useState<string>('TODOS');
   const [selectedTipo, setSelectedTipo] = useState<string>('TODOS');
+
+  const selectedSede =
+    user?.role === 'admin'
+      ? activeSiteId || 'TODAS'
+      : user?.siteId || 'MG-MG';
 
   // Data state
   const [deliveries, setDeliveries] = useState<EntregaEPPMGRecord[]>([]);
@@ -58,13 +59,6 @@ export const EPPDeliveryModuleView: React.FC = () => {
   // Delete confirmation modal state (replaces window.confirm blocked in iframes)
   const [deleteTarget, setDeleteTarget] = useState<EntregaEPPMGRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Sync sede if user changes or mounts
-  useEffect(() => {
-    if (user && user.role !== 'admin' && user.siteId) {
-      setSelectedSede(user.siteId);
-    }
-  }, [user]);
 
   // Load deliveries
   const loadDeliveries = () => {
@@ -100,15 +94,13 @@ export const EPPDeliveryModuleView: React.FC = () => {
 
   // Filter deliveries according to user role, sede, and search
   const filteredDeliveries = deliveries.filter((item) => {
+    const itemSede = String(item.Sede || '').trim().toUpperCase();
     // Sede restriction
     if (user?.role !== 'admin') {
-      if (item.Sede !== user?.siteId) return false;
+      if (itemSede !== String(user?.siteId || '').trim().toUpperCase()) return false;
     } else {
-      if (selectedSede !== 'TODAS' && item.Sede !== selectedSede) return false;
+      if (selectedSede !== 'TODAS' && itemSede !== selectedSede.trim().toUpperCase()) return false;
     }
-
-    // Status filter
-    if (selectedEstado !== 'TODOS' && item.Estado !== selectedEstado) return false;
 
     // Tipo entrega filter
     if (selectedTipo !== 'TODOS' && item.Tipo_Entrega !== selectedTipo) return false;
@@ -133,8 +125,6 @@ export const EPPDeliveryModuleView: React.FC = () => {
 
   // Calculate KPIs
   const totalRegistros = filteredDeliveries.length;
-  const entregadasFirmadas = filteredDeliveries.filter((d) => d.Estado === 'Entregado y Firmado').length;
-  const pendientesFirma = filteredDeliveries.filter((d) => d.Estado === 'Pendiente de Firma').length;
   const costoTotalEPP = filteredDeliveries.reduce((sum, d) => sum + (Number(d.Costo) || 0), 0);
 
   const handleCreateNew = () => {
@@ -244,10 +234,6 @@ export const EPPDeliveryModuleView: React.FC = () => {
             <span className="text-[10px] font-black uppercase tracking-wider text-[#0A2958] bg-slate-100 px-2.5 py-0.5 rounded-full">
               Módulo: Personal
             </span>
-            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Hoja Oficial: Entrega Epp´s MG
-            </span>
           </div>
           <h1 className="text-2xl font-black text-[#0A2958] flex items-center gap-2.5">
             <Shield className="w-7 h-7 text-[#E60000]" />
@@ -323,7 +309,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Card 1: Total Registros */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
@@ -349,39 +335,13 @@ export const EPPDeliveryModuleView: React.FC = () => {
             <DollarSign className="w-6 h-6" />
           </div>
         </div>
-
-        {/* Card 3: Entregados y Firmados */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-slate-500 block">Entregados & Firmados</span>
-            <div className="text-2xl font-black text-emerald-600 mt-1">{entregadasFirmadas}</div>
-            <span className="text-[11px] text-slate-400">
-              {totalRegistros > 0 ? `${Math.round((entregadasFirmadas / totalRegistros) * 100)}% de actas completas` : '0%'}
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Card 4: Pendientes de Firma */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-slate-500 block">Pendientes de Firma</span>
-            <div className="text-2xl font-black text-amber-600 mt-1">{pendientesFirma}</div>
-            <span className="text-[11px] text-amber-600 font-medium">Requieren gestión</span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
       </div>
 
       {/* Filters and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           {/* Search Input */}
-          <div className="md:col-span-5 relative">
+          <div className="md:col-span-6 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -397,7 +357,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
             {user?.role === 'admin' ? (
               <select
                 value={selectedSede}
-                onChange={(e) => setSelectedSede(e.target.value)}
+                onChange={(e) => switchSite(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
               >
                 <option value="TODAS">🏢 Todas las Sedes (Admin General)</option>
@@ -415,34 +375,19 @@ export const EPPDeliveryModuleView: React.FC = () => {
             )}
           </div>
 
-          {/* Estado Selector */}
-          <div className="md:col-span-2">
-            <select
-              value={selectedEstado}
-              onChange={(e) => setSelectedEstado(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
-            >
-              <option value="TODOS">Todos los Estados</option>
-              <option value="Entregado y Firmado">Entregado y Firmado</option>
-              <option value="Pendiente de Firma">Pendiente de Firma</option>
-              <option value="Borrador">Borrador</option>
-            </select>
-          </div>
-
           {/* Tipo Entrega Selector */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <select
               value={selectedTipo}
               onChange={(e) => setSelectedTipo(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
             >
               <option value="TODOS">Todos los Tipos</option>
-              <option value="Dotación Periódica">Dotación Periódica</option>
-              <option value="Ingreso Nuevo">Ingreso Nuevo</option>
-              <option value="Reposición por Desgaste">Reposición Desgaste</option>
-              <option value="Cambio por Daño">Cambio por Daño</option>
-              <option value="Pérdida o Hurto">Pérdida o Hurto</option>
-              <option value="Reposición por Accidente">Accidente</option>
+              {storageService.getTiposEntrega().map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -453,13 +398,12 @@ export const EPPDeliveryModuleView: React.FC = () => {
             Mostrando <span className="font-bold text-slate-800">{filteredDeliveries.length}</span> registros en la hoja <span className="font-semibold text-[#0A2958]">Entrega Epp´s MG</span>
             {selectedSede !== 'TODAS' && ` (Sede ${selectedSede})`}
           </div>
-          {(searchQuery || selectedEstado !== 'TODOS' || selectedTipo !== 'TODOS' || (user?.role === 'admin' && selectedSede !== 'TODAS')) && (
+          {(searchQuery || selectedTipo !== 'TODOS' || (user?.role === 'admin' && selectedSede !== 'TODAS')) && (
             <button
               onClick={() => {
                 setSearchQuery('');
-                setSelectedEstado('TODOS');
                 setSelectedTipo('TODOS');
-                if (user?.role === 'admin') setSelectedSede('TODAS');
+                if (user?.role === 'admin') switchSite('TODAS');
               }}
               className="text-[#E60000] hover:underline text-[11px] font-semibold cursor-pointer"
             >

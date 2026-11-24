@@ -49,7 +49,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   onSave,
   editingDelivery,
 }) => {
-  const { user } = useAuth();
+  const { user, activeSiteId } = useAuth();
   const { workers, supervisores, sedes } = useSST();
   const eppCatalog = storageService.getEPPCatalog();
   const laboresCatalog = storageService.getLabores();
@@ -67,9 +67,38 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       .toUpperCase()
       .trim();
 
-  // Extraer del Maestro los trabajadores que en la columna Cargo registran como Supervisor
+  const isAdmin = user?.role === 'admin';
+  const userSiteId = user?.siteId || '';
+  const scopedSiteId =
+    !isAdmin && userSiteId && userSiteId !== 'TODAS'
+      ? userSiteId.trim()
+      : activeSiteId && activeSiteId !== 'TODAS'
+      ? activeSiteId.trim()
+      : '';
+
+  // Limitar los trabajadores visibles según la sede logueada (el administrador en TODAS ve todos)
+  const availableWorkers = useMemo(() => {
+    if (!scopedSiteId) {
+      return workers;
+    }
+    return workers.filter(
+      (w) => String(w.sedeId || '').trim().toUpperCase() === scopedSiteId.toUpperCase()
+    );
+  }, [workers, scopedSiteId]);
+
+  const availableSedes = useMemo(() => {
+    if (!scopedSiteId) {
+      return sedes;
+    }
+    const filtered = sedes.filter(
+      (s) => s.id.toUpperCase() === scopedSiteId.toUpperCase()
+    );
+    return filtered.length > 0 ? filtered : sedes;
+  }, [sedes, scopedSiteId]);
+
+  // Extraer del Maestro los trabajadores de la sede logueada que en la columna Cargo registran como Supervisor
   const supervisoresMaestro = useMemo(() => {
-    const fromWorkers = workers
+    const fromWorkers = availableWorkers
       .filter((w) => {
         if (w.estado === 'INACTIVO') return false;
         const cargoCol = (w.cargo || w.puesto || '').toUpperCase();
@@ -86,16 +115,26 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       return uniqueFromWorkers;
     }
 
-    const fromSupervisores = supervisores.map((s) => s.supervisor.trim()).filter(Boolean);
-    return Array.from(new Set([...fromSupervisores, ...CATALOGO_SUPERVISORES])).sort((a, b) =>
-      a.localeCompare(b)
-    );
-  }, [workers, supervisores]);
+    const fromSupervisores = supervisores
+      .filter(
+        (s) =>
+          !scopedSiteId ||
+          String(s.sedeId || '').trim().toUpperCase() === scopedSiteId.toUpperCase()
+      )
+      .map((s) => s.supervisor.trim())
+      .filter(Boolean);
+
+    if (fromSupervisores.length > 0) {
+      return Array.from(new Set(fromSupervisores)).sort((a, b) => a.localeCompare(b));
+    }
+
+    return scopedSiteId ? [] : [...CATALOGO_SUPERVISORES].sort((a, b) => a.localeCompare(b));
+  }, [availableWorkers, supervisores, scopedSiteId]);
 
   // Selected sede default
   const defaultSede =
     user?.role === 'admin'
-      ? editingDelivery?.Sede || 'MG-HA'
+      ? editingDelivery?.Sede || scopedSiteId || 'MG-HA'
       : user?.siteId || 'MG-HA';
 
   // The 19 Official Form Fields:
@@ -191,7 +230,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
     setMes(getMesNumero(newFecha));
   };
 
-  // Lookup worker in Maestro by Cédula -> Trae Nombre, Sede y sugerencia de Labor/Area
+  // Lookup worker in Maestro by Cédula -> Trae Nombre, Sede y sugerencia de Labor/Area (limitado por sede para no administradores)
   const handleCedulaLookup = (inputCedula: string) => {
     setCedula(inputCedula);
     const cleanCedula = inputCedula.trim();
@@ -200,7 +239,9 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       return;
     }
 
-    const found = storageService.getWorkerByCedula(cleanCedula);
+    const found = availableWorkers.find(
+      (w) => String(w.cedula).trim() === cleanCedula
+    );
     if (found) {
       setMatchedWorker(found);
       setNombre(found.nombre);
@@ -238,6 +279,17 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setError(null);
     } else {
       setMatchedWorker(null);
+      if (!isAdmin && userSiteId && userSiteId !== 'TODAS') {
+        const otherSiteWorker = workers.find(
+          (w) => String(w.cedula).trim() === cleanCedula
+        );
+        if (otherSiteWorker) {
+          setNombre('');
+          setError(
+            `El trabajador con cédula ${cleanCedula} pertenece a la sede ${otherSiteWorker.sedeId}. Solo puedes consultar e ingresar personal de la sede ${userSiteId}.`
+          );
+        }
+      }
     }
   };
 
@@ -290,7 +342,9 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setFirmaSST(editingDelivery.Firma_SST || '');
       setObservaciones(editingDelivery.observaciones || '');
 
-      const found = storageService.getWorkerByCedula(editingDelivery.Cédula);
+      const found = availableWorkers.find(
+        (w) => String(w.cedula).trim() === String(editingDelivery.Cédula).trim()
+      );
       setMatchedWorker(found || null);
     } else {
       // New delivery auto generation: format matching Drive sheet (e.g. 15gh86 or EPP-consecutive)
@@ -304,7 +358,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setFecha(todayStr);
       setAnio(getAnioFecha(todayStr));
       setMes(getMesNumero(todayStr));
-      setSede(user?.role === 'admin' ? 'MG-HA' : user?.siteId || 'MG-HA');
+      setSede(scopedSiteId || 'MG-HA');
       setCedula('');
       setNombre('');
       setLabor(CATALOGO_LABORES[0] || 'MIPE');
@@ -358,6 +412,20 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       return;
     }
 
+    if (!isAdmin && userSiteId && userSiteId !== 'TODAS') {
+      const otherSiteWorker = workers.find(
+        (w) =>
+          String(w.cedula).trim() === cedula.trim() &&
+          String(w.sedeId || '').trim().toUpperCase() !== userSiteId.trim().toUpperCase()
+      );
+      if (otherSiteWorker) {
+        setError(
+          `El trabajador con cédula ${cedula.trim()} pertenece a la sede ${otherSiteWorker.sedeId}. Solo puedes registrar personal de la sede ${userSiteId}.`
+        );
+        return;
+      }
+    }
+
     if (!supervisor.trim()) {
       setError('Por favor busque y seleccione el supervisor a cargo.');
       return;
@@ -370,6 +438,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
 
     const cleanCodigoEpp = codigoEpp.split(' - ')[0].trim();
     const cleanEpp = epp.trim();
+    const effectiveSede = !isAdmin && userSiteId && userSiteId !== 'TODAS' ? userSiteId : sede;
 
     const record: EntregaEPPMGRecord = {
       id: editingDelivery?.id || `epp-${Date.now()}`,
@@ -377,7 +446,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       Fecha: fecha,
       Año: anio, // Guardado en el registro y en Drive, sin mostrar en el formulario
       Mes: mes, // Guardado en el registro y en Drive, sin mostrar en el formulario
-      Sede: sede,
+      Sede: effectiveSede,
       Cédula: cedula.trim(),
       Nombre: nombre.trim(),
       Labor: labor.trim(),
@@ -459,16 +528,13 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             </div>
           )}
 
-          {/* Bloque 1: Fecha y Sede (Fecha, Sede) -> Id_Epp no se muestra en el formulario por requerimiento */}
+          {/* Bloque 1: Fecha y Sede -> Id_Epp no se muestra en el formulario por requerimiento */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h3 className="font-bold text-[#0A2958] uppercase tracking-wide flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#E60000]" />
-                1. Datos de Fecha y Sede (Fecha, Sede)
+                1. Datos de Fecha y Sede
               </h3>
-              <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                Año ({anio}) y Mes ({mes}) se guardan automáticamente en Drive
-              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -488,20 +554,16 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
 
               {/* 5. Sede (Traída del Maestro de acuerdo a la cédula ingresada) */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>5. Sede *</span>
-                  {matchedWorker?.sedeId ? (
-                    <span className="text-[9px] text-emerald-700 font-bold">Desde Maestro: {matchedWorker.sedeId}</span>
-                  ) : (
-                    <span className="text-[9px] text-slate-500 font-semibold">Traída desde Maestro según cédula</span>
-                  )}
                 </label>
                 <select
                   value={sede}
                   onChange={(e) => setSede(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+                  disabled={!isAdmin && Boolean(userSiteId && userSiteId !== 'TODAS')}
+                  className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100 disabled:text-slate-600"
                 >
-                  {sedes.map((s) => (
+                  {availableSedes.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.id}
                     </option>
@@ -526,9 +588,8 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-1">
               {/* 6. Cédula con búsqueda automática en hoja Maestro */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>6. Cédula *</span>
-                  <span className="text-[9px] text-blue-700 font-bold">Hoja Maestro</span>
                 </label>
                 <input
                   type="text"
@@ -541,7 +602,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   required
                 />
                 <datalist id="cedulas-maestro-list">
-                  {workers.map((w) => (
+                  {availableWorkers.map((w) => (
                     <option key={w.cedula} value={w.cedula}>
                       {w.nombre} ({w.sedeId} - {w.puesto})
                     </option>
@@ -558,9 +619,8 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
 
               {/* 7. Nombre (Traído automáticamente de Maestro) */}
               <div className="md:col-span-2">
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>7. Nombre del Trabajador *</span>
-                  <span className="text-[9px] text-slate-500">Auto desde Cédula</span>
                 </label>
                 <input
                   type="text"
@@ -637,9 +697,8 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
 
               {/* 9. Area (Opciones de la hoja Area del archivo Entrega Epp´s MG) */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>9. Area *</span>
-                  <span className="text-[9px] text-slate-500 font-semibold">Hoja Area</span>
                 </label>
                 <select
                   value={area}
@@ -661,7 +720,9 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
               <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span>10. Supervisor a Cargo *</span>
                 <span className="text-[9px] text-emerald-700 font-bold">
-                  Maestro Cargo: Supervisor ({supervisoresMaestro.length})
+                  {scopedSiteId
+                    ? `Supervisores ${scopedSiteId} (${supervisoresMaestro.length})`
+                    : `Maestro Cargo: Supervisor (${supervisoresMaestro.length})`}
                 </span>
               </label>
               <div className="relative">
@@ -736,12 +797,12 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             </div>
           </div>
 
-          {/* Bloque 3: Elemento EPP, Costo y Tipo de Entrega (Campos 11, 12, 13, 14, 15) */}
+          {/* Bloque 3: Elemento EPP, Costo y Tipo de Entrega */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h3 className="font-bold text-[#0A2958] uppercase tracking-wide flex items-center gap-2">
                 <Shield className="w-4 h-4 text-[#E60000]" />
-                3. Elemento EPP, Costo de Hoja Epp´s y Entrega (Campos 11 al 15)
+                3. Elemento EPP, Costo y Tipo de Entrega
               </h3>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
                 Tarifas Oficiales Hoja Epp´s
@@ -855,9 +916,8 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
 
               {/* 12. Epp (Nombre traído de la hoja Epp´s) */}
               <div className="md:col-span-5">
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>12. Descripción Epp *</span>
-                  <span className="text-[9px] text-slate-500">Auto desde Código</span>
                 </label>
                 <input
                   type="text"
@@ -891,10 +951,9 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
               </div>
 
               {/* 13. Tipo_Entrega (Opciones de la hoja Tipo_Entrega) */}
-              <div className="md:col-span-6">
-                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <div className="md:col-span-12">
+                <label className="block font-bold text-slate-700 mb-1">
                   <span>13. Tipo_Entrega *</span>
-                  <span className="text-[9px] text-slate-500 font-semibold">Hoja Tipo_Entrega</span>
                 </label>
                 <select
                   value={tipoEntrega}
@@ -907,48 +966,6 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                     </option>
                   ))}
                 </select>
-              </div>
-
-              {/* 15. Estado */}
-              <div className="md:col-span-6">
-                <label className="block font-bold text-slate-700 mb-1">
-                  15. Estado del Registro *
-                </label>
-                <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-lg border border-slate-200">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="estado_entrega"
-                      value="Entregado y Firmado"
-                      checked={estado === 'Entregado y Firmado'}
-                      onChange={() => setEstado('Entregado y Firmado')}
-                      className="text-[#0A2958] focus:ring-[#0A2958]"
-                    />
-                    <span className="font-bold text-emerald-800">Entregado y Firmado</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="estado_entrega"
-                      value="Pendiente de Firma"
-                      checked={estado === 'Pendiente de Firma'}
-                      onChange={() => setEstado('Pendiente de Firma')}
-                      className="text-[#0A2958] focus:ring-[#0A2958]"
-                    />
-                    <span className="font-bold text-amber-800">Pendiente de Firma</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="estado_entrega"
-                      value="Borrador"
-                      checked={estado === 'Borrador'}
-                      onChange={() => setEstado('Borrador')}
-                      className="text-[#0A2958] focus:ring-[#0A2958]"
-                    />
-                    <span className="font-medium text-slate-600">Borrador</span>
-                  </label>
-                </div>
               </div>
             </div>
           </div>

@@ -42,7 +42,7 @@ interface SSTContextType {
 const SSTContext = createContext<SSTContextType | undefined>(undefined);
 
 export const SSTProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, activeSiteId } = useAuth();
   const [workers, setWorkers] = useState<PersonnelWorker[]>([]);
   const [records, setRecords] = useState<SSTRecord[]>([]);
   const [sedes, setSedes] = useState<Sede[]>([]);
@@ -99,18 +99,29 @@ export const SSTProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Compute stats according to user role and site permissions
+  // Compute stats according to user role and active site filter
   const stats = useMemo(() => {
-    const activeWorkers = workers.filter((w) => w.estado === 'ACTIVO').length;
-    const inactiveWorkers = workers.filter((w) => w.estado === 'INACTIVO').length;
+    const effectiveSite =
+      user?.role !== 'admin' && user?.siteId && user.siteId !== 'TODAS'
+        ? user.siteId
+        : activeSiteId && activeSiteId !== 'TODAS'
+        ? activeSiteId
+        : null;
 
-    // Filter records if site lead has specific site
-    const relevantRecords = records.filter((r) => {
-      if (user?.role === 'site_lead' && user.siteId !== 'TODAS') {
-        return r.sedeId === user.siteId;
-      }
-      return true;
-    });
+    const relevantWorkers = effectiveSite
+      ? workers.filter(
+          (w) => String(w.sedeId || '').trim().toUpperCase() === effectiveSite.trim().toUpperCase()
+        )
+      : workers;
+
+    const activeWorkers = relevantWorkers.filter((w) => w.estado === 'ACTIVO').length;
+    const inactiveWorkers = relevantWorkers.filter((w) => w.estado === 'INACTIVO').length;
+
+    const relevantRecords = effectiveSite
+      ? records.filter(
+          (r) => String(r.sedeId || '').trim().toUpperCase() === effectiveSite.trim().toUpperCase()
+        )
+      : records;
 
     const pendingRecords = relevantRecords.filter((r) => r.estado === 'PENDIENTE').length;
     const inProcessRecords = relevantRecords.filter((r) => r.estado === 'EN_PROCESO').length;
@@ -127,7 +138,7 @@ export const SSTProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return {
-      totalWorkers: workers.length,
+      totalWorkers: relevantWorkers.length,
       activeWorkers,
       inactiveWorkers,
       totalRecords: relevantRecords.length,
@@ -137,7 +148,7 @@ export const SSTProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recordsBySite,
       recordsByModule,
     };
-  }, [workers, records, user]);
+  }, [workers, records, user, activeSiteId]);
 
   return (
     <SSTContext.Provider

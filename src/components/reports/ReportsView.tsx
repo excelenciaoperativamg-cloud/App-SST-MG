@@ -18,11 +18,14 @@ import { auditService } from '../../services/auditService';
 
 export const ReportsView: React.FC = () => {
   const { records, workers } = useSST();
-  const { user } = useAuth();
+  const { user, activeSiteId, switchSite } = useAuth();
 
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [selectedSede, setSelectedSede] = useState('TODAS');
+  const selectedSede =
+    user?.role === 'admin'
+      ? activeSiteId || 'TODAS'
+      : user?.siteId || 'TODAS';
   const [selectedModule, setSelectedModule] = useState('TODOS');
   const [selectedEstado, setSelectedEstado] = useState('TODOS');
   const [selectedWorker, setSelectedWorker] = useState('TODOS');
@@ -114,9 +117,9 @@ export const ReportsView: React.FC = () => {
             <label className="block font-bold text-slate-700 mb-1">Sede:</label>
             <select
               value={selectedSede}
-              onChange={(e) => setSelectedSede(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-semibold text-slate-800"
-              disabled={user?.role === 'site_lead'}
+              onChange={(e) => switchSite(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-semibold text-slate-800 disabled:bg-slate-100"
+              disabled={user?.role !== 'admin'}
             >
               <option value="TODAS">Todas las Sedes</option>
               {INITIAL_SEDES.map((s) => (
@@ -169,11 +172,17 @@ export const ReportsView: React.FC = () => {
               className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-semibold text-slate-800"
             >
               <option value="TODOS">Todos los trabajadores</option>
-              {workers.map((w) => (
-                <option key={w.cedula} value={w.cedula}>
-                  {w.nombre} ({w.cedula})
-                </option>
-              ))}
+              {workers
+                .filter(
+                  (w) =>
+                    selectedSede === 'TODAS' ||
+                    String(w.sedeId || '').trim().toUpperCase() === selectedSede.trim().toUpperCase()
+                )
+                .map((w) => (
+                  <option key={w.cedula} value={w.cedula}>
+                    {w.nombre} ({w.cedula})
+                  </option>
+                ))}
             </select>
           </div>
 

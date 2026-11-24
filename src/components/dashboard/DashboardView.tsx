@@ -33,11 +33,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenNewRecordModal,
 }) => {
   const { workers, records, stats } = useSST();
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, activeSiteId, switchSite } = useAuth();
   const [selectedPickerModule, setSelectedPickerModule] = useState<MenuModuleConfig | null>(null);
 
   // Filters
-  const [selectedSede, setSelectedSede] = useState<string>('TODAS');
+  const selectedSede =
+    user?.role === 'admin'
+      ? activeSiteId || 'TODAS'
+      : user?.siteId || 'TODAS';
   const [selectedModule, setSelectedModule] = useState<string>('TODOS');
   const [selectedEstado, setSelectedEstado] = useState<string>('TODOS');
   const [dateRange, setDateRange] = useState<'all' | 'month' | 'quarter'>('all');
@@ -170,8 +173,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Sede */}
             <select
               value={selectedSede}
-              onChange={(e) => setSelectedSede(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+              onChange={(e) => switchSite(e.target.value)}
+              disabled={user?.role !== 'admin'}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100"
             >
               <option value="TODAS">Todas las Sedes</option>
               {INITIAL_SEDES.map((s) => (
@@ -219,13 +223,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <option value="month">Este Mes</option>
             </select>
 
-            {(selectedSede !== 'TODAS' ||
+            {((user?.role === 'admin' && selectedSede !== 'TODAS') ||
               selectedModule !== 'TODOS' ||
               selectedEstado !== 'TODOS' ||
               dateRange !== 'all') && (
               <button
                 onClick={() => {
-                  setSelectedSede('TODAS');
+                  if (user?.role === 'admin') switchSite('TODAS');
                   setSelectedModule('TODOS');
                   setSelectedEstado('TODOS');
                   setDateRange('all');
