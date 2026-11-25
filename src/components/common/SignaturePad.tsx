@@ -39,9 +39,22 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#0A2958'; // Corporate navy ink
     ctx.lineWidth = 2.5;
+  }, []);
 
-    // Load initial signature if provided
-    if (value && value.startsWith('data:image')) {
+  useEffect(() => {
+    setHasSignature(Boolean(value));
+    const canvas = canvasRef.current;
+    if (!canvas || isDrawing) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!value) {
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      return;
+    }
+
+    if (value.startsWith('data:image')) {
       const img = new Image();
       img.onload = () => {
         ctx.clearRect(0, 0, rect.width, rect.height);
@@ -50,7 +63,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
       };
       img.src = value;
     }
-  }, []);
+  }, [value]);
 
   const getCoordinates = (
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>

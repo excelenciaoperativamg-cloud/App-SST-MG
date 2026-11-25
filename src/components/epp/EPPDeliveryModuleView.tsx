@@ -26,6 +26,7 @@ import { googleDriveService } from '../../services/googleDriveService';
 import { useAuth } from '../../context/AuthContext';
 import { EPPDeliveryFormModal } from './EPPDeliveryFormModal';
 import { AppsScriptConnectionModal } from './AppsScriptConnectionModal';
+import { TipoEntregaBarChart } from './TipoEntregaBarChart';
 
 export const EPPDeliveryModuleView: React.FC = () => {
   const { user, activeSiteId, switchSite } = useAuth();
@@ -92,8 +93,8 @@ export const EPPDeliveryModuleView: React.FC = () => {
     };
   }, []);
 
-  // Filter deliveries according to user role, sede, and search
-  const filteredDeliveries = deliveries.filter((item) => {
+  // Filter deliveries according to user role, sede, and search (before Tipo filter for chart comparison)
+  const sedeAndSearchFilteredDeliveries = deliveries.filter((item) => {
     const itemSede = String(item.Sede || '').trim().toUpperCase();
     // Sede restriction
     if (user?.role !== 'admin') {
@@ -101,9 +102,6 @@ export const EPPDeliveryModuleView: React.FC = () => {
     } else {
       if (selectedSede !== 'TODAS' && itemSede !== selectedSede.trim().toUpperCase()) return false;
     }
-
-    // Tipo entrega filter
-    if (selectedTipo !== 'TODOS' && item.Tipo_Entrega !== selectedTipo) return false;
 
     // Search query across 19 fields
     if (searchQuery.trim()) {
@@ -120,6 +118,30 @@ export const EPPDeliveryModuleView: React.FC = () => {
       if (!matches) return false;
     }
 
+    return true;
+  });
+
+  const tiposEntregaOptions = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    storageService.getTiposEntrega().forEach((t) => {
+      const clean = String(t || '').trim();
+      if (clean && !seen.has(clean.toUpperCase())) seen.set(clean.toUpperCase(), clean);
+    });
+    deliveries.forEach((d) => {
+      const clean = String(d.Tipo_Entrega || '').trim();
+      if (clean && !seen.has(clean.toUpperCase())) seen.set(clean.toUpperCase(), clean);
+    });
+    return Array.from(seen.values());
+  }, [deliveries]);
+
+  const filteredDeliveries = sedeAndSearchFilteredDeliveries.filter((item) => {
+    // Tipo entrega filter
+    if (
+      selectedTipo !== 'TODOS' &&
+      String(item.Tipo_Entrega || '').trim().toUpperCase() !== selectedTipo.trim().toUpperCase()
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -337,6 +359,15 @@ export const EPPDeliveryModuleView: React.FC = () => {
         </div>
       </div>
 
+      {/* Gráfica Interactiva en Barras de Tipo Entrega */}
+      <TipoEntregaBarChart
+        deliveries={sedeAndSearchFilteredDeliveries}
+        tiposCatalog={tiposEntregaOptions}
+        selectedTipo={selectedTipo}
+        onSelectTipo={setSelectedTipo}
+        scopeLabel={user?.role === 'admin' && selectedSede === 'TODAS' ? 'Todas las sedes' : `Sede ${selectedSede}`}
+      />
+
       {/* Filters and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -383,7 +414,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
             >
               <option value="TODOS">Todos los Tipos</option>
-              {storageService.getTiposEntrega().map((tipo) => (
+              {tiposEntregaOptions.map((tipo) => (
                 <option key={tipo} value={tipo}>
                   {tipo}
                 </option>

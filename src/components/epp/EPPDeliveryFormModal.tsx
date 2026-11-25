@@ -56,9 +56,15 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const areasCatalog = storageService.getAreas();
   const tiposEntregaCatalog = storageService.getTiposEntrega();
 
+  const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supervisorContainerRef = useRef<HTMLDivElement>(null);
   const eppContainerRef = useRef<HTMLDivElement>(null);
+
+  const showValidationError = (message: string) => {
+    setError(message);
+    formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const normalizeSearch = (val: string) =>
     String(val || '')
@@ -402,13 +408,25 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const effectiveSede = !isAdmin && userSiteId && userSiteId !== 'TODAS' ? userSiteId : sede;
+
+    if (!fecha.trim()) {
+      showValidationError('Por favor seleccione la fecha de entrega (2. Fecha).');
+      return;
+    }
+
+    if (!effectiveSede.trim()) {
+      showValidationError('Por favor seleccione la sede (5. Sede).');
+      return;
+    }
+
     if (!cedula.trim()) {
-      setError('Por favor ingrese la cédula del trabajador.');
+      showValidationError('Por favor ingrese la cédula del trabajador (6. Cédula).');
       return;
     }
 
     if (!nombre.trim()) {
-      setError('Por favor ingrese el nombre del trabajador o ingrese una cédula registrada en Maestro.');
+      showValidationError('Por favor ingrese el nombre del trabajador (7. Nombre del Trabajador).');
       return;
     }
 
@@ -419,26 +437,65 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
           String(w.sedeId || '').trim().toUpperCase() !== userSiteId.trim().toUpperCase()
       );
       if (otherSiteWorker) {
-        setError(
+        showValidationError(
           `El trabajador con cédula ${cedula.trim()} pertenece a la sede ${otherSiteWorker.sedeId}. Solo puedes registrar personal de la sede ${userSiteId}.`
         );
         return;
       }
     }
 
-    if (!supervisor.trim()) {
-      setError('Por favor busque y seleccione el supervisor a cargo.');
+    if (!labor.trim()) {
+      showValidationError('Por favor seleccione o ingrese la labor (8. Labor).');
       return;
     }
 
-    if (!codigoEpp || !epp) {
-      setError('Por favor busque y seleccione un código EPP válido de la hoja Epp´s.');
+    if (!area.trim()) {
+      showValidationError('Por favor seleccione el área (9. Area).');
+      return;
+    }
+
+    if (!supervisor.trim()) {
+      showValidationError('Por favor busque y seleccione el supervisor a cargo (10. Supervisor a Cargo).');
+      return;
+    }
+
+    if (!codigoEpp.trim() || !epp.trim()) {
+      showValidationError('Por favor busque y seleccione un código EPP válido de la hoja Epp´s (11. Código Epp).');
+      return;
+    }
+
+    if (costo === null || costo === undefined || isNaN(Number(costo))) {
+      showValidationError('El costo del EPP es obligatorio (14. Costo).');
+      return;
+    }
+
+    if (!tipoEntrega.trim()) {
+      showValidationError('Por favor seleccione el tipo de entrega (13. Tipo_Entrega).');
+      return;
+    }
+
+    if (!fotoEntrega.trim()) {
+      showValidationError('Por favor adjunte o tome la fotografía de entrega (16. Foto_Entrega).');
+      return;
+    }
+
+    if (!responsableSST.trim()) {
+      showValidationError('Por favor ingrese el responsable SST (18. Responsable SST).');
+      return;
+    }
+
+    if (!firmaTrabajador.trim()) {
+      showValidationError('Por favor capture la firma digital del trabajador (17. Firma_Trabajador).');
+      return;
+    }
+
+    if (!firmaSST.trim()) {
+      showValidationError('Por favor capture la firma digital del responsable SST (19. Firma SST).');
       return;
     }
 
     const cleanCodigoEpp = codigoEpp.split(' - ')[0].trim();
     const cleanEpp = epp.trim();
-    const effectiveSede = !isAdmin && userSiteId && userSiteId !== 'TODAS' ? userSiteId : sede;
 
     const record: EntregaEPPMGRecord = {
       id: editingDelivery?.id || `epp-${Date.now()}`,
@@ -451,16 +508,16 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       Nombre: nombre.trim(),
       Labor: labor.trim(),
       Area: area.trim(),
-      Supervisor: supervisor,
+      Supervisor: supervisor.trim(),
       Código_Epp: cleanCodigoEpp, // Solo el Código Epp sin el nombre
       Epp: cleanEpp, // La descripción Epp
-      Tipo_Entrega: tipoEntrega,
+      Tipo_Entrega: tipoEntrega.trim(),
       Costo: Number(costo) || 0,
       Estado: estado,
-      Foto_Entrega: fotoEntrega || undefined,
-      Firma_Trabajador: firmaTrabajador || undefined,
-      Responsable_SST: responsableSST.trim() || user?.displayName || 'Responsable SST',
-      Firma_SST: firmaSST || undefined,
+      Foto_Entrega: fotoEntrega,
+      Firma_Trabajador: firmaTrabajador,
+      Responsable_SST: responsableSST.trim(),
+      Firma_SST: firmaSST,
       observaciones: observaciones.trim(),
       createdAt: editingDelivery?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -519,7 +576,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
         </div>
 
         {/* Modal Body / Form */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6 max-h-[calc(88vh-140px)] overflow-y-auto text-xs">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className="p-5 sm:p-6 space-y-6 max-h-[calc(88vh-140px)] overflow-y-auto text-xs">
           
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-red-700 animate-in fade-in">
@@ -562,6 +619,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   onChange={(e) => setSede(e.target.value)}
                   disabled={!isAdmin && Boolean(userSiteId && userSiteId !== 'TODAS')}
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100 disabled:text-slate-600"
+                  required
                 >
                   {availableSedes.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -578,7 +636,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h3 className="font-bold text-[#0A2958] uppercase tracking-wide flex items-center gap-2">
                 <User className="w-4 h-4 text-[#E60000]" />
-                2. Datos del Trabajador Receptor (Cédula, Nombre, Labor, Area, Supervisor)
+                2. Datos del Trabajador
               </h3>
               <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
                 Campos 6 al 10
@@ -923,6 +981,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   type="text"
                   value={epp}
                   readOnly
+                  required
                   className="w-full px-2.5 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-800 font-semibold cursor-not-allowed"
                 />
               </div>
@@ -959,6 +1018,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
                   value={tipoEntrega}
                   onChange={(e) => setTipoEntrega(e.target.value)}
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+                  required
                 >
                   {tiposEntregaCatalog.map((tipo) => (
                     <option key={tipo} value={tipo}>
@@ -975,10 +1035,10 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h3 className="font-bold text-[#0A2958] uppercase tracking-wide flex items-center gap-2">
                 <Camera className="w-4 h-4 text-[#E60000]" />
-                4. Evidencia Fotográfica (16. Foto_Entrega)
+                4. Evidencia Fotográfica (16. Foto_Entrega) <span className="text-[#E60000]">*</span>
               </h3>
               <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                Campo 16
+                Campo 16 (Obligatorio)
               </span>
             </div>
 
@@ -1075,20 +1135,24 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
               {/* 17. Firma_Trabajador */}
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
                 <SignaturePad
+                  key={`firma-trab-${editingDelivery?.id || 'new'}-${isOpen}`}
                   label="17. Firma_Trabajador (Receptor Conforme)"
                   sublabel={`Firma digital de: ${nombre || 'Trabajador seleccionado'}`}
                   value={firmaTrabajador}
                   onChange={setFirmaTrabajador}
+                  required
                 />
               </div>
 
               {/* 19. Firma SST */}
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
                 <SignaturePad
+                  key={`firma-sst-${editingDelivery?.id || 'new'}-${isOpen}`}
                   label="19. Firma SST (Certificación Oficial)"
                   sublabel={`Firma digital de: ${responsableSST || 'Líder SST'}`}
                   value={firmaSST}
                   onChange={setFirmaSST}
+                  required
                 />
               </div>
             </div>
