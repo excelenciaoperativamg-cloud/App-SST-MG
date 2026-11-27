@@ -65,12 +65,21 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const isAdmin = user?.role === 'admin';
+  const lockedSiteId = !isAdmin && user?.siteId && user.siteId !== 'TODAS' ? user.siteId.trim() : null;
+  const scopedSiteId =
+    lockedSiteId || (activeSiteId && activeSiteId !== 'TODAS' ? activeSiteId.trim() : '');
+
+  const availableSedes = scopedSiteId
+    ? INITIAL_SEDES.filter((s) => s.id.toUpperCase() === scopedSiteId.toUpperCase())
+    : INITIAL_SEDES;
+
   // Sync when editing an existing record
   useEffect(() => {
     if (recordToEdit) {
       setMenuId(recordToEdit.menuId);
       setSubMenuId(recordToEdit.subMenuId);
-      setSedeId(recordToEdit.sedeId);
+      setSedeId(lockedSiteId || recordToEdit.sedeId);
       setArea(recordToEdit.area);
       setSupervisor(recordToEdit.supervisor || '');
       setFecha(recordToEdit.fecha);
@@ -88,7 +97,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       const s = m.submenus.find((sub) => sub.id === initialSubMenuId) || m.submenus[0];
       setMenuId(m.id);
       setSubMenuId(s.id);
-      setSedeId(activeSiteId !== 'TODAS' ? activeSiteId : 'MG-MG');
+      setSedeId(scopedSiteId || 'MG-MG');
       setArea('Operaciones');
       setSupervisor('');
       setFecha(new Date().toISOString().split('T')[0]);
@@ -102,7 +111,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       setEvidencias([]);
     }
     setErrorMsg(null);
-  }, [recordToEdit, initialMenuId, initialSubMenuId, activeSiteId, isOpen]);
+  }, [recordToEdit, initialMenuId, initialSubMenuId, activeSiteId, lockedSiteId, scopedSiteId, isOpen]);
 
   // Current selected module & submodule config
   const currentModule = SST_MODULES.find((m) => m.id === menuId) || SST_MODULES[0];
@@ -116,8 +125,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
     }
   }, [sedeId, area, supervisores]);
 
-  const isAdmin = user?.role === 'admin';
-  const lockedSiteId = !isAdmin && user?.siteId && user.siteId !== 'TODAS' ? user.siteId : null;
+  // Site scope enforced above via lockedSiteId / scopedSiteId
 
   // Handle worker selection from Master (scoped by sede for non-admin users)
   const handleWorkerChange = (cedula: string) => {
@@ -230,7 +238,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       moduloNombre: currentModule.nombre,
       subModuloNombre: currentSub.nombre,
       fecha,
-      sedeId,
+      sedeId: lockedSiteId || sedeId,
       area,
       supervisor: supervisor || undefined,
       cedulaTrabajador: cedulaTrabajador || undefined,
@@ -383,7 +391,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100"
                 disabled={Boolean(lockedSiteId)}
               >
-                {INITIAL_SEDES.filter((s) => !lockedSiteId || s.id === lockedSiteId).map((s) => (
+                {(availableSedes.length > 0 ? availableSedes : INITIAL_SEDES).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.codigo}
                   </option>

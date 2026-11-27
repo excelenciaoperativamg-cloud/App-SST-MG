@@ -357,7 +357,7 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
       setFecha(editingDelivery.Fecha);
       setAnio(editingDelivery.Año || getAnioFecha(editingDelivery.Fecha));
       setMes(editingDelivery.Mes || getMesNumero(editingDelivery.Fecha));
-      setSede(editingDelivery.Sede);
+      setSede(!isAdmin && userSiteId && userSiteId !== 'TODAS' ? userSiteId.trim() : editingDelivery.Sede);
       setCedula(editingDelivery.Cédula);
       setNombre(editingDelivery.Nombre);
       setLabor(editingDelivery.Labor || CATALOGO_LABORES[0]);

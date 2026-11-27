@@ -110,15 +110,43 @@ export const EmergencySheetFormModal: React.FC<EmergencySheetFormModalProps> = (
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const isAdmin = user?.role === 'admin';
+  const userSiteId = user?.siteId || '';
+  const scopedSiteId =
+    !isAdmin && userSiteId && userSiteId !== 'TODAS'
+      ? userSiteId.trim()
+      : activeSiteId && activeSiteId !== 'TODAS'
+      ? activeSiteId.trim()
+      : '';
+
+  const availableSedes = useMemo(() => {
+    if (!scopedSiteId) return sedes;
+    const filtered = sedes.filter(
+      (s) => s.id.toUpperCase() === scopedSiteId.toUpperCase()
+    );
+    return filtered.length > 0 ? filtered : sedes;
+  }, [sedes, scopedSiteId]);
+
+  const resolveSedeCode = (rawVal: string): string => {
+    const raw = String(rawVal || '').trim();
+    if (!raw) return '';
+    const upper = raw.toUpperCase();
+    const matched = sedes.find(
+      (s) =>
+        s.id.toUpperCase() === upper ||
+        s.codigo.toUpperCase() === upper ||
+        upper.startsWith(s.codigo.toUpperCase() + ' ') ||
+        upper.startsWith(s.codigo.toUpperCase() + '—') ||
+        upper.startsWith(s.codigo.toUpperCase() + '-') ||
+        s.nombre.toUpperCase() === upper
+    );
+    return matched ? matched.id : raw;
+  };
+
   const defaultSede = useMemo(() => {
-    if (user?.role !== 'admin' && user?.siteId && user.siteId !== 'TODAS') {
-      return user.siteId;
-    }
-    if (activeSiteId && activeSiteId !== 'TODAS') {
-      return activeSiteId;
-    }
-    return sedes[0]?.id || 'MG-HA';
-  }, [user, activeSiteId, sedes]);
+    if (scopedSiteId) return scopedSiteId;
+    return sedes[0]?.id || 'MG-MG';
+  }, [scopedSiteId, sedes]);
 
   // Identify Sede header on this sheet so workers/supervisors filter cleanly
   const sedeHeaderName = useMemo(() => {
@@ -170,8 +198,12 @@ export const EmergencySheetFormModal: React.FC<EmergencySheetFormModalProps> = (
       const existing = rowToEdit?.values?.[header];
 
       if (rowToEdit) {
-        if (n.includes('sede') && user?.role !== 'admin' && user?.siteId && user.siteId !== 'TODAS') {
-          initial[header] = user.siteId;
+        if (n.includes('sede')) {
+          if (!isAdmin && userSiteId && userSiteId !== 'TODAS') {
+            initial[header] = userSiteId.trim();
+          } else {
+            initial[header] = resolveSedeCode(existing !== undefined ? String(existing) : '');
+          }
         } else {
           initial[header] = existing !== undefined ? String(existing) : '';
         }
@@ -359,11 +391,15 @@ export const EmergencySheetFormModal: React.FC<EmergencySheetFormModalProps> = (
     try {
       const firstHeader = sheet.headers[0];
       const rowId = String(values[firstHeader] || rowToEdit?.rowId || generateRowId(sheet.sheetName)).trim();
+      const enforcedValues: Record<string, string> = { ...values };
+      if (!isAdmin && userSiteId && userSiteId !== 'TODAS' && sedeHeaderName) {
+        enforcedValues[sedeHeaderName] = userSiteId.trim();
+      }
       const rowPayload: EmergencySheetRow = {
         rowNumber: rowToEdit?.rowNumber,
         rowId,
         values: {
-          ...values,
+          ...enforcedValues,
           ...(firstHeader ? { [firstHeader]: rowId } : {}),
         },
       };
@@ -542,7 +578,8 @@ export const EmergencySheetFormModal: React.FC<EmergencySheetFormModalProps> = (
               }
 
               if (kind === 'sede') {
-                const locked = user?.role !== 'admin' && Boolean(user?.siteId && user.siteId !== 'TODAS');
+                const locked = !isAdmin && Boolean(userSiteId && userSiteId !== 'TODAS');
+                const knownIds = new Set(availableSedes.map((s) => s.id));
                 return (
                   <div key={header} className="space-y-1.5">
                     <label className="block font-bold text-[#0A2958]">
@@ -557,10 +594,13 @@ export const EmergencySheetFormModal: React.FC<EmergencySheetFormModalProps> = (
                         required={required}
                         className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100"
                       >
-                        <option value="">Seleccionar Sede...</option>
-                        {sedes.map((s) => (
+                        {!scopedSiteId && <option value="">Seleccionar Sede...</option>}
+                        {val && !knownIds.has(val) && !scopedSiteId && (
+                          <option value={val}>{val}</option>
+                        )}
+                        {availableSedes.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.codigo} — {s.nombre}
+                            {s.codigo}
                           </option>
                         ))}
                       </select>
