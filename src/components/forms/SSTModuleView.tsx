@@ -169,6 +169,8 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
         } else {
           setDriveBanner({ type: 'error', message: emRes.message });
         }
+      } else if (canAdmin() && emRes.message && !emRes.message.includes('Sin conexión')) {
+        setDriveBanner({ type: 'error', message: emRes.message });
       }
       return;
     }

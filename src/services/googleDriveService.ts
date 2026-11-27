@@ -726,6 +726,14 @@ export const googleDriveService = {
       if (Array.isArray(data.sstRecords)) {
         storageService.syncSSTRecordsFromRemote(data.sstRecords);
       }
+      if (Array.isArray(data.emergencySheets) && data.emergencySheets.length > 0) {
+        const filteredSheets = data.emergencySheets.filter(
+          (s: EmergencySheetData) => s && !storageService.isExcludedEmergencySheet(s.sheetName)
+        );
+        if (filteredSheets.length > 0) {
+          storageService.setEmergencySheets(filteredSheets);
+        }
+      }
       if (Array.isArray(data.usuarios) && data.usuarios.length > 0) {
         const headers = Object.keys(data.usuarios[0]);
         const rows = [
@@ -1217,7 +1225,17 @@ export const googleDriveService = {
           throw new Error(data.message || 'No se pudo leer el archivo Inspección Emergencias.');
         }
 
-        const rawSheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
+        if (!Array.isArray(data.sheets)) {
+          return {
+            success: false,
+            sheets: [],
+            needsConfig: true,
+            message:
+              'El Apps Script conectado en VITE_APPS_SCRIPT_URL es de una versión anterior (solo lee Entrega Epp´s MG). Actualiza el script en Apps Script con "Nueva versión" para habilitar Inspección Emergencias usando esa misma variable.',
+          };
+        }
+
+        const rawSheets: EmergencySheetData[] = data.sheets;
         if (rawSheets.length > 0 && typeof rawSheets[0] === 'string') {
           throw new Error(
             'El Apps Script conectado devolvió solo nombres de hojas. Actualiza el script con la versión más reciente.'

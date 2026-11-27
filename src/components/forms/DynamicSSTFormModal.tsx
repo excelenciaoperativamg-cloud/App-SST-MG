@@ -141,29 +141,63 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
     }
   };
 
-  // Persist file upload for photographic evidence using Data URL
+  // Persist file upload for photographic evidence using compressed Data URL for images
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     Array.from(files).forEach((f) => {
-      if (f.size > 5 * 1024 * 1024) {
-        setErrorMsg(`El archivo ${f.name} supera el límite de 5 MB.`);
+      if (f.size > 8 * 1024 * 1024) {
+        setErrorMsg(`El archivo ${f.name} supera el límite de 8 MB.`);
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-        if (!dataUrl) return;
-        const item: EvidenciaArchivo = {
-          id: 'ev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-          nombre: f.name,
-          tipo: f.type || 'image/jpeg',
-          url: dataUrl,
-          tamanoKb: Math.round(f.size / 1024),
-          fecha: new Date().toISOString().split('T')[0],
+        const rawUrl = typeof reader.result === 'string' ? reader.result : '';
+        if (!rawUrl) return;
+
+        const addEvidence = (finalUrl: string) => {
+          const item: EvidenciaArchivo = {
+            id: 'ev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            nombre: f.name,
+            tipo: f.type.startsWith('image/') ? 'image/jpeg' : f.type || 'application/octet-stream',
+            url: finalUrl,
+            tamanoKb: Math.max(1, Math.round((finalUrl.length * 0.75) / 1024)),
+            fecha: new Date().toISOString().split('T')[0],
+          };
+          setEvidencias((prev) => [...prev, item]);
         };
-        setEvidencias((prev) => [...prev, item]);
+
+        if (f.type.startsWith('image/')) {
+          const img = new Image();
+          img.onerror = () => addEvidence(rawUrl);
+          img.onload = () => {
+            const maxSide = 960;
+            let { width, height } = img;
+            if (width > maxSide || height > maxSide) {
+              if (width > height) {
+                height = Math.round((height * maxSide) / width);
+                width = maxSide;
+              } else {
+                width = Math.round((width * maxSide) / height);
+                height = maxSide;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              addEvidence(rawUrl);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            addEvidence(canvas.toDataURL('image/jpeg', 0.72));
+          };
+          img.src = rawUrl;
+        } else {
+          addEvidence(rawUrl);
+        }
       };
       reader.readAsDataURL(f);
     });

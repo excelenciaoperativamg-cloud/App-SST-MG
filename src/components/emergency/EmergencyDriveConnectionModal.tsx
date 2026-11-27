@@ -13,7 +13,7 @@ import {
   FileSpreadsheet,
   Layers,
 } from 'lucide-react';
-import { EMERGENCY_APPS_SCRIPT_CODE } from '../../config/appsScriptTemplate';
+import { APPS_SCRIPT_CODE, EMERGENCY_APPS_SCRIPT_CODE } from '../../config/appsScriptTemplate';
 import { googleDriveService, TARGET_DRIVE_FOLDER } from '../../services/googleDriveService';
 import { EmergencySheetData } from '../../types/emergency';
 
@@ -46,16 +46,21 @@ export const EmergencyDriveConnectionModal: React.FC<EmergencyDriveConnectionMod
     }
   }, [isOpen]);
 
+  const [scriptMode, setScriptMode] = useState<'unified' | 'emergency'>(() =>
+    googleDriveService.isAppsScriptConfigured() ? 'unified' : 'emergency'
+  );
+  const activeScriptCode = scriptMode === 'unified' ? APPS_SCRIPT_CODE : EMERGENCY_APPS_SCRIPT_CODE;
+
   if (!isOpen) return null;
 
   const handleCopyScript = async () => {
     try {
-      await navigator.clipboard.writeText(EMERGENCY_APPS_SCRIPT_CODE);
+      await navigator.clipboard.writeText(activeScriptCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     } catch {
       const textarea = document.createElement('textarea');
-      textarea.value = EMERGENCY_APPS_SCRIPT_CODE;
+      textarea.value = activeScriptCode;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -195,34 +200,50 @@ export const EmergencyDriveConnectionModal: React.FC<EmergencyDriveConnectionMod
           </div>
 
           {/* Instructions */}
-          <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-4 space-y-2">
+          <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-4 space-y-2.5">
             <h3 className="font-bold text-[#0A2958] text-xs uppercase tracking-wide">
-              Pasos para vincular todas las hojas de Inspección Emergencias:
+              Conexión en Vercel y Google Drive (Sin duplicar variables):
             </h3>
-            <ol className="list-decimal pl-5 space-y-1.5 text-slate-700 leading-relaxed">
-              <li>
-                Abre el archivo <strong>Inspección Emergencias</strong> en Google Drive dentro de la carpeta{' '}
-                <strong>{TARGET_DRIVE_FOLDER.name}</strong> y entra a{' '}
-                <strong>Extensiones ➔ Apps Script</strong>.
-              </li>
-              <li>
-                Borra el contenido actual, haz clic en <strong>Copiar Script</strong> abajo y pégalo en{' '}
-                <code>Código.gs</code>. Guarda el proyecto (💾).
-              </li>
-              <li>
-                Haz clic en <strong>Implementar ➔ Nueva implementación</strong>, selecciona tipo{' '}
-                <strong>Aplicación web</strong>, en <em>Ejecutar como</em> elige <strong>Yo</strong> y en{' '}
-                <em>Quién tiene acceso</em> elige <strong>Cualquier usuario</strong>.
-              </li>
-              <li>
-                Copia la <strong>URL de la aplicación web</strong> generada, pégala abajo y presiona{' '}
-                <strong>Conectar y Sincronizar Hojas</strong>.
-              </li>
-            </ol>
-            {hasMainScript && (
-              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-2">
-                <strong>Nota:</strong> Ya tienes un Apps Script principal configurado. Si actualizaste ese script con la plantilla unificada o ingresas abajo la URL/ID del archivo <em>Inspección Emergencias</em>, también puedes sincronizar sin crear otro script.
-              </p>
+            {hasMainScript ? (
+              <div className="text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1.5">
+                <p className="font-bold">
+                  Ya tienes configurada la variable <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200">VITE_APPS_SCRIPT_URL</code> (Entrega Epp´s MG). No necesitas crear otra variable con ese nombre en Vercel:
+                </p>
+                <ol className="list-decimal pl-5 space-y-1">
+                  <li>
+                    Abre tu proyecto de Apps Script actual (el de <strong>Entrega Epp´s MG</strong>), reemplaza el código con el <strong>Script Unificado</strong> de abajo y presiona Guardar (💾).
+                  </li>
+                  <li>
+                    Ve a <strong>Implementar ➔ Administrar implementaciones ➔ Editar (✏️) ➔ Versión: Nueva versión ➔ Implementar</strong> (mantiene la misma URL, no cambias nada en Vercel).
+                  </li>
+                  <li>
+                    Si prefieres un script aparte para Inspección Emergencias, en Vercel usa el nombre distinto{' '}
+                    <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200">VITE_EMERGENCY_APPS_SCRIPT_URL</code> o pega esa segunda URL en el campo de abajo.
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              <ol className="list-decimal pl-5 space-y-1.5 text-slate-700 leading-relaxed">
+                <li>
+                  Abre el archivo <strong>Inspección Emergencias</strong> en Google Drive dentro de la carpeta{' '}
+                  <strong>{TARGET_DRIVE_FOLDER.name}</strong> y entra a{' '}
+                  <strong>Extensiones ➔ Apps Script</strong>.
+                </li>
+                <li>
+                  Borra el contenido actual, haz clic en <strong>Copiar Script</strong> abajo y pégalo en{' '}
+                  <code>Código.gs</code>. Guarda el proyecto (💾).
+                </li>
+                <li>
+                  Haz clic en <strong>Implementar ➔ Nueva implementación</strong>, selecciona tipo{' '}
+                  <strong>Aplicación web</strong>, en <em>Ejecutar como</em> elige <strong>Yo</strong> y en{' '}
+                  <em>Quién tiene acceso</em> elige <strong>Cualquier usuario</strong>.
+                </li>
+                <li>
+                  Copia la <strong>URL de la aplicación web</strong> generada, pégala abajo y presiona{' '}
+                  <strong>Conectar y Sincronizar Hojas</strong> (en Vercel puedes guardarla como{' '}
+                  <code>VITE_EMERGENCY_APPS_SCRIPT_URL</code>).
+                </li>
+              </ol>
             )}
           </div>
 
@@ -326,19 +347,39 @@ export const EmergencyDriveConnectionModal: React.FC<EmergencyDriveConnectionMod
 
           {/* Apps Script Code */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowCode(!showCode)}
-                className="font-bold text-[#0A2958] hover:underline flex items-center gap-1.5 cursor-pointer"
-              >
-                <Code2 className="w-4 h-4 text-[#EA580C]" />
-                <span>
-                  {showCode
-                    ? 'Ocultar Script para Inspección Emergencias (Código.gs)'
-                    : 'Mostrar Script para Inspección Emergencias (Código.gs)'}
-                </span>
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCode(!showCode)}
+                  className="font-bold text-[#0A2958] hover:underline flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Code2 className="w-4 h-4 text-[#EA580C]" />
+                  <span>
+                    {showCode ? 'Ocultar Código.gs' : 'Mostrar Código.gs'}
+                  </span>
+                </button>
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => { setScriptMode('unified'); setCopied(false); }}
+                    className={`px-2.5 py-1 rounded-md font-bold cursor-pointer ${
+                      scriptMode === 'unified' ? 'bg-[#0A2958] text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    Script Unificado (VITE_APPS_SCRIPT_URL)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setScriptMode('emergency'); setCopied(false); }}
+                    className={`px-2.5 py-1 rounded-md font-bold cursor-pointer ${
+                      scriptMode === 'emergency' ? 'bg-[#EA580C] text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    Solo Emergencias (VITE_EMERGENCY_APPS_SCRIPT_URL)
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="button"
@@ -356,7 +397,7 @@ export const EmergencyDriveConnectionModal: React.FC<EmergencyDriveConnectionMod
 
             {showCode && (
               <pre className="rounded-xl bg-slate-900 text-slate-100 p-4 font-mono text-[11px] overflow-x-auto max-h-72 overflow-y-auto border border-slate-700 leading-relaxed">
-                {EMERGENCY_APPS_SCRIPT_CODE}
+                {activeScriptCode}
               </pre>
             )}
           </div>

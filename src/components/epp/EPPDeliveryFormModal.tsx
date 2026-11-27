@@ -43,6 +43,38 @@ interface EPPDeliveryFormModalProps {
   editingDelivery?: EntregaEPPMGRecord | null;
 }
 
+const compressImageFile = (file: File, maxSide = 960, quality = 0.72): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!file.type.startsWith('image/')) {
+        resolve(dataUrl);
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => resolve(dataUrl);
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+
 export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
   isOpen,
   onClose,
@@ -389,20 +421,22 @@ export const EPPDeliveryFormModal: React.FC<EPPDeliveryFormModalProps> = ({
     setError(null);
   }, [editingDelivery, isOpen]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('La foto de entrega no debe superar los 5 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      setError('La foto de entrega no debe superar los 10 MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFotoEntrega(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file, 960, 0.72);
+      setFotoEntrega(compressed);
+      setError(null);
+    } catch {
+      setError('No se pudo procesar la foto seleccionada.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

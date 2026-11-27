@@ -362,10 +362,14 @@ function getEmergencySpreadsheet_(customId) {
     const f = files.next();
     if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
       const normName = normalizeSheetName_(f.getName());
-      if (normName.indexOf('emergencia') !== -1) {
+      if (normName.indexOf('emergencia') !== -1 || (normName.indexOf('inspeccion') !== -1 && normName.indexOf('integral') === -1)) {
         return SpreadsheetApp.openById(f.getId());
       }
     }
+  }
+  const globalSearch = DriveApp.searchFiles("title contains 'Emergencia' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
+  if (globalSearch.hasNext()) {
+    return SpreadsheetApp.openById(globalSearch.next().getId());
   }
   throw new Error('No se encontró el archivo "Inspección Emergencias" en la carpeta App_SST MG.V2. Indica el ID del archivo en la configuración.');
 }
@@ -627,6 +631,12 @@ function doGet(e) {
     } catch (err) {
       sstRecords = [];
     }
+    let emergencySheets = [];
+    try {
+      emergencySheets = readEmergencyWorkbook_(getEmergencySpreadsheet_(''));
+    } catch (err) {
+      emergencySheets = [];
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -639,6 +649,7 @@ function doGet(e) {
       maestro: appSstData.maestro,
       usuarios: appSstData.usuarios,
       sstRecords: sstRecords,
+      emergencySheets: emergencySheets,
       timestamp: new Date().toISOString(),
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {

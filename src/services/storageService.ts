@@ -749,20 +749,139 @@ export const storageService = {
         }
       }
 
-      // Clean legacy seed EPP deliveries
+      // Clean legacy seed EPP deliveries & compact oversized cached Base64 photos
       const storedDeliveries = localStorage.getItem(KEYS.EPP_DELIVERIES);
       if (storedDeliveries) {
         const parsed: EntregaEPPMGRecord[] = JSON.parse(storedDeliveries);
         if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((d) => !LEGACY_SEED_EPP_IDS.has(d.id));
-          if (cleaned.length !== parsed.length) {
-            localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(cleaned));
+          let changed = false;
+          const cleaned = parsed
+            .filter((d) => {
+              const keep = !LEGACY_SEED_EPP_IDS.has(d.id);
+              if (!keep) changed = true;
+              return keep;
+            })
+            .map((d, idx) => {
+              const next = { ...d };
+              if (idx > 15 && typeof next.Foto_Entrega === 'string' && next.Foto_Entrega.startsWith('data:image') && next.Foto_Entrega.length > 40000) {
+                next.Foto_Entrega = '[Imagen sincronizada]';
+                changed = true;
+              }
+              return next;
+            });
+          if (changed) {
+            this.safeSetItem(KEYS.EPP_DELIVERIES, JSON.stringify(cleaned));
           }
         }
       }
+
+      // Compact any bloated audit logs from previous sessions
+      auditService.compactLogs();
     } catch {
       // Ignore parse errors
     }
+  },
+
+  safeSetItem(key: string, value: string): boolean {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (err: any) {
+      const isQuota =
+        err?.name === 'QuotaExceededError' ||
+        err?.code === 22 ||
+        err?.code === 1014 ||
+        String(err?.message || '').toLowerCase().includes('quota');
+      if (!isQuota) return false;
+
+      // Free space by compacting audit logs first
+      auditService.compactLogs();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  },
+
+  saveDeliveriesWithQuotaFallback(list: EntregaEPPMGRecord[], priorityId?: string): void {
+    if (this.safeSetItem(KEYS.EPP_DELIVERIES, JSON.stringify(list))) return;
+
+    // Compact heavy base64 images on older items while preserving the newest/active item
+    const compacted = list.map((item, idx) => {
+      const isPriority = priorityId ? (item.id === priorityId || item.Id_Epp === priorityId) : idx === 0;
+      if (isPriority) return item;
+      const copy = { ...item };
+      if (typeof copy.Foto_Entrega === 'string' && copy.Foto_Entrega.startsWith('data:image') && copy.Foto_Entrega.length > 15000) {
+        copy.Foto_Entrega = '[Foto respaldada]';
+      }
+      if (typeof copy.Firma_Trabajador === 'string' && copy.Firma_Trabajador.startsWith('data:image') && copy.Firma_Trabajador.length > 15000) {
+        copy.Firma_Trabajador = '[Firma digital]';
+      }
+      if (typeof copy.Firma_SST === 'string' && copy.Firma_SST.startsWith('data:image') && copy.Firma_SST.length > 15000) {
+        copy.Firma_SST = '[Firma SST]';
+      }
+      return copy;
+    });
+    if (this.safeSetItem(KEYS.EPP_DELIVERIES, JSON.stringify(compacted))) return;
+
+    // Last resort: compact even priority item's oversized image so metadata & text record always saves
+    const minimal = compacted.map((item) => {
+      const copy = { ...item };
+      if (typeof copy.Foto_Entrega === 'string' && copy.Foto_Entrega.startsWith('data:image') && copy.Foto_Entrega.length > 80000) {
+        copy.Foto_Entrega = '[Foto respaldada en Drive]';
+      }
+      return copy;
+    });
+    this.safeSetItem(KEYS.EPP_DELIVERIES, JSON.stringify(minimal));
+  },
+
+  saveRecordsWithQuotaFallback(list: SSTRecord[], priorityId?: string): void {
+    if (this.safeSetItem(KEYS.RECORDS, JSON.stringify(list))) return;
+
+    const compacted = list.map((rec, idx) => {
+      const isPriority = priorityId ? rec.id === priorityId : idx === 0;
+      if (isPriority) return rec;
+      if (!rec.evidencias || rec.evidencias.length === 0) return rec;
+      return {
+        ...rec,
+        evidencias: rec.evidencias.map((ev) => ({
+          ...ev,
+          url: ev.url.startsWith('data:image') && ev.url.length > 15000 ? '[Evidencia respaldada]' : ev.url,
+        })),
+      };
+    });
+    if (this.safeSetItem(KEYS.RECORDS, JSON.stringify(compacted))) return;
+
+    const minimal = compacted.map((rec) => ({
+      ...rec,
+      evidencias: (rec.evidencias || []).map((ev) => ({
+        ...ev,
+        url: ev.url.startsWith('data:image') && ev.url.length > 80000 ? '[Evidencia en Drive]' : ev.url,
+      })),
+    }));
+    this.safeSetItem(KEYS.RECORDS, JSON.stringify(minimal));
+  },
+
+  saveEmergencySheetsWithQuotaFallback(sheets: EmergencySheetData[]): void {
+    if (this.safeSetItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(sheets))) return;
+
+    const compacted = sheets.map((sh) => ({
+      ...sh,
+      rows: sh.rows.map((row, idx) => {
+        if (idx === 0) return row;
+        const nextValues: Record<string, string> = {};
+        Object.entries(row.values).forEach(([k, v]) => {
+          nextValues[k] =
+            typeof v === 'string' && v.startsWith('data:image') && v.length > 15000
+              ? '[Imagen respaldada]'
+              : v;
+        });
+        return { ...row, values: nextValues };
+      }),
+    }));
+    this.safeSetItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(compacted));
   },
 
   // Initialize storage with seeds if empty and scrub legacy fake cache entries
@@ -851,7 +970,7 @@ export const storageService = {
       );
     }
 
-    localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(updatedWorkers));
+    this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(updatedWorkers));
     this.notify();
     return worker;
   },
@@ -869,7 +988,7 @@ export const storageService = {
     });
 
     const updatedList = Array.from(map.values());
-    localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(updatedList));
+    this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(updatedList));
 
     auditService.log(
       auditUser.email,
@@ -888,7 +1007,7 @@ export const storageService = {
   replaceWorkersFromRemote(remoteWorkers: PersonnelWorker[]) {
     if (!Array.isArray(remoteWorkers) || remoteWorkers.length === 0) return;
     const cleaned = remoteWorkers.filter((w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula).trim()));
-    localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
+    this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
     this.notify();
   },
 
@@ -914,7 +1033,7 @@ export const storageService = {
       return w;
     });
 
-    localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(updated));
+    this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(updated));
 
     auditService.log(
       auditUser.email,
@@ -1023,7 +1142,7 @@ export const storageService = {
       );
     }
 
-    localStorage.setItem(KEYS.RECORDS, JSON.stringify(updatedRecords));
+    this.saveRecordsWithQuotaFallback(updatedRecords, record.id);
     this.notify();
     return record;
   },
@@ -1034,7 +1153,7 @@ export const storageService = {
     if (!target) return false;
 
     const filtered = records.filter((r) => r.id !== id);
-    localStorage.setItem(KEYS.RECORDS, JSON.stringify(filtered));
+    this.saveRecordsWithQuotaFallback(filtered);
 
     auditService.log(
       auditUser.email,
@@ -1058,7 +1177,7 @@ export const storageService = {
         !LEGACY_FAKE_WORKER_CEDULAS.has(String(r.cedulaTrabajador || '').trim()) &&
         !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(r.supervisor || '').trim().toUpperCase())
     );
-    localStorage.setItem(KEYS.RECORDS, JSON.stringify(cleaned));
+    this.saveRecordsWithQuotaFallback(cleaned);
     this.notify();
   },
 
@@ -1150,7 +1269,7 @@ export const storageService = {
       );
     }
 
-    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
+    this.saveDeliveriesWithQuotaFallback(updated, itemToSave.id);
     this.notify();
     return itemToSave;
   },
@@ -1161,7 +1280,7 @@ export const storageService = {
     if (!target) return false;
 
     const updated = list.filter((d) => d.id !== id && d.Id_Epp !== id);
-    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(updated));
+    this.saveDeliveriesWithQuotaFallback(updated);
 
     auditService.log(
       auditUser.email,
@@ -1277,7 +1396,7 @@ export const storageService = {
 
   syncDeliveriesFromRemote(remoteRecords: EntregaEPPMGRecord[]) {
     if (!Array.isArray(remoteRecords)) return;
-    localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(remoteRecords));
+    this.saveDeliveriesWithQuotaFallback(remoteRecords);
     this.notify();
   },
 
@@ -1404,7 +1523,7 @@ export const storageService = {
   saveImportHistory(entry: MasterImportHistory) {
     const list = this.getImportHistory();
     const updated = [entry, ...list.slice(0, 49)];
-    localStorage.setItem(KEYS.IMPORT_HISTORY, JSON.stringify(updated));
+    this.safeSetItem(KEYS.IMPORT_HISTORY, JSON.stringify(updated));
     this.notify();
   },
 
@@ -1443,14 +1562,14 @@ export const storageService = {
     }
 
     try {
-      if (Array.isArray(backupData.sedes)) localStorage.setItem(KEYS.SEDES, JSON.stringify(backupData.sedes));
-      if (Array.isArray(backupData.supervisores)) localStorage.setItem(KEYS.SUPERVISORES, JSON.stringify(backupData.supervisores));
-      if (Array.isArray(backupData.eps)) localStorage.setItem(KEYS.EPS, JSON.stringify(backupData.eps));
-      if (Array.isArray(backupData.arl)) localStorage.setItem(KEYS.ARL, JSON.stringify(backupData.arl));
-      if (Array.isArray(backupData.personnel)) localStorage.setItem(KEYS.PERSONNEL, JSON.stringify(backupData.personnel));
-      if (Array.isArray(backupData.records)) localStorage.setItem(KEYS.RECORDS, JSON.stringify(backupData.records));
-      if (Array.isArray(backupData.eppDeliveries)) localStorage.setItem(KEYS.EPP_DELIVERIES, JSON.stringify(backupData.eppDeliveries));
-      if (Array.isArray(backupData.importHistory)) localStorage.setItem(KEYS.IMPORT_HISTORY, JSON.stringify(backupData.importHistory));
+      if (Array.isArray(backupData.sedes)) this.safeSetItem(KEYS.SEDES, JSON.stringify(backupData.sedes));
+      if (Array.isArray(backupData.supervisores)) this.safeSetItem(KEYS.SUPERVISORES, JSON.stringify(backupData.supervisores));
+      if (Array.isArray(backupData.eps)) this.safeSetItem(KEYS.EPS, JSON.stringify(backupData.eps));
+      if (Array.isArray(backupData.arl)) this.safeSetItem(KEYS.ARL, JSON.stringify(backupData.arl));
+      if (Array.isArray(backupData.personnel)) this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(backupData.personnel));
+      if (Array.isArray(backupData.records)) this.saveRecordsWithQuotaFallback(backupData.records);
+      if (Array.isArray(backupData.eppDeliveries)) this.saveDeliveriesWithQuotaFallback(backupData.eppDeliveries);
+      if (Array.isArray(backupData.importHistory)) this.safeSetItem(KEYS.IMPORT_HISTORY, JSON.stringify(backupData.importHistory));
 
       auditService.log(
         auditUser.email,
@@ -1504,7 +1623,7 @@ export const storageService = {
   setEmergencySheets(sheets: EmergencySheetData[]) {
     if (!Array.isArray(sheets)) return;
     const filtered = sheets.filter((s) => s && !this.isExcludedEmergencySheet(s.sheetName));
-    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(filtered));
+    this.saveEmergencySheetsWithQuotaFallback(filtered);
     this.notify();
   },
 
@@ -1552,7 +1671,7 @@ export const storageService = {
       suggestions: nextSuggestions,
     };
 
-    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(updatedSheets));
+    this.saveEmergencySheetsWithQuotaFallback(updatedSheets);
     if (auditUser) {
       auditService.log(
         auditUser.email,
@@ -1590,7 +1709,7 @@ export const storageService = {
       rows: filtered,
     };
 
-    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(updatedSheets));
+    this.saveEmergencySheetsWithQuotaFallback(updatedSheets);
     if (auditUser) {
       auditService.log(
         auditUser.email,
