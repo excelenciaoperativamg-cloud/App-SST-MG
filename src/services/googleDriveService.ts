@@ -9,7 +9,7 @@ import {
 import * as XLSX from 'xlsx';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AppUser, INITIAL_APP_USERS } from '../config/users';
-import { Role } from '../types';
+import { Role, SSTRecord, SSTRecordStatus } from '../types';
 import { EntregaEPPMGRecord } from '../types/epp';
 import { EmergencySheetData, EmergencySheetRow } from '../types/emergency';
 import { auditService } from './auditService';
@@ -90,12 +90,14 @@ export const googleDriveService = {
   },
 
   /**
-   * Apps Script Web App URL management (Automatic connection without OAuth popups)
+   * Apps Script Web App URL management (Automatic unified connection across ALL forms)
    */
   getAppsScriptUrl(): string {
     const stored = localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) || '';
     const envUrl = (import.meta as any).env?.VITE_APPS_SCRIPT_URL || '';
-    return (stored || envUrl || '').trim();
+    const emergencyStored = localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY) || '';
+    const emergencyEnv = (import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL || '';
+    return (stored || envUrl || emergencyStored || emergencyEnv || '').trim();
   },
 
   setAppsScriptUrl(url: string): void {
@@ -106,6 +108,7 @@ export const googleDriveService = {
       localStorage.removeItem(APPS_SCRIPT_STORAGE_KEY);
     }
     window.dispatchEvent(new CustomEvent('mg-sst-apps-script-updated', { detail: clean }));
+    window.dispatchEvent(new CustomEvent('mg-sst-emergency-script-updated', { detail: clean }));
   },
 
   isAppsScriptConfigured(): boolean {
@@ -689,6 +692,9 @@ export const googleDriveService = {
       if (Array.isArray(data.maestro) && data.maestro.length > 0) {
         storageService.replaceWorkersFromRemote(data.maestro);
       }
+      if (Array.isArray(data.sstRecords)) {
+        storageService.syncSSTRecordsFromRemote(data.sstRecords);
+      }
       if (Array.isArray(data.usuarios) && data.usuarios.length > 0) {
         const headers = Object.keys(data.usuarios[0]);
         const rows = [
@@ -1076,10 +1082,14 @@ export const googleDriveService = {
     const clean = url.trim();
     if (clean) {
       localStorage.setItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY, clean);
+      if (!localStorage.getItem(APPS_SCRIPT_STORAGE_KEY)) {
+        localStorage.setItem(APPS_SCRIPT_STORAGE_KEY, clean);
+      }
     } else {
       localStorage.removeItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY);
     }
     window.dispatchEvent(new CustomEvent('mg-sst-emergency-script-updated', { detail: clean }));
+    window.dispatchEvent(new CustomEvent('mg-sst-apps-script-updated', { detail: clean }));
   },
 
   getEmergencySpreadsheetId(): string {
@@ -1106,12 +1116,38 @@ export const googleDriveService = {
   },
 
   isEmergencyDriveConfigured(): boolean {
-    const url = this.getEffectiveEmergencyAppsScriptUrl();
-    return Boolean(url && url.startsWith('https://script.google.com/'));
+    return Boolean(this.getEffectiveEmergencyAppsScriptUrl()?.startsWith('https://script.google.com/')) || this.isAuthenticated();
   },
 
   getEmergencyLastSyncTime(): string | null {
     return localStorage.getItem(EMERGENCY_LAST_SYNC_KEY);
+  },
+
+  async findEmergencyFileOAuth(): Promise<DriveFileInfo | null> {
+    if (!cachedAccessToken) return null;
+    const savedId = this.getEmergencySpreadsheetId();
+    if (savedId) {
+      return {
+        id: savedId,
+        name: this.getEmergencySpreadsheetName(),
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+      };
+    }
+    const folderFiles = await this.listFilesInFolder(TARGET_DRIVE_FOLDER.id).catch(() => []);
+    const matchInFolder = folderFiles.find((f) => {
+      const n = f.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return n.includes('emergencia') && f.mimeType === 'application/vnd.google-apps.spreadsheet';
+    });
+    if (matchInFolder) return matchInFolder;
+
+    const query = encodeURIComponent(`name contains 'Emergencia' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`);
+    const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)&pageSize=10`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${cachedAccessToken}` } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.files && data.files.length > 0) return data.files[0];
+    }
+    return null;
   },
 
   async syncEmergencySheetsFromDrive(
@@ -1130,64 +1166,157 @@ export const googleDriveService = {
       customSpreadsheetId ?? this.getEmergencySpreadsheetId()
     );
 
-    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
-      return {
-        success: false,
-        sheets: [],
-        needsConfig: true,
-        message: 'Configura la conexión Drive de Inspección Emergencias para vincular sus hojas.',
-      };
+    if (targetUrl && targetUrl.startsWith('https://script.google.com/')) {
+      try {
+        const separator = targetUrl.includes('?') ? '&' : '?';
+        const idParam = targetSpreadsheetId
+          ? `&spreadsheetId=${encodeURIComponent(targetSpreadsheetId)}`
+          : '';
+        const res = await fetch(`${targetUrl}${separator}action=getEmergencySheets${idParam}`, {
+          method: 'GET',
+          redirect: 'follow',
+        });
+
+        if (!res.ok) {
+          throw new Error(`El servidor respondió HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'No se pudo leer el archivo Inspección Emergencias.');
+        }
+
+        const sheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
+        if (sheets.length > 0 && typeof sheets[0] === 'string') {
+          throw new Error(
+            'El Apps Script conectado devolvió solo nombres de hojas. Actualiza el script con la versión más reciente.'
+          );
+        }
+
+        storageService.setEmergencySheets(sheets);
+        if (data.spreadsheetId) {
+          localStorage.setItem(EMERGENCY_SPREADSHEET_ID_KEY, String(data.spreadsheetId));
+        }
+        if (data.spreadsheetName) {
+          localStorage.setItem(EMERGENCY_SPREADSHEET_NAME_KEY, String(data.spreadsheetName));
+        }
+        localStorage.setItem(EMERGENCY_LAST_SYNC_KEY, new Date().toISOString());
+
+        return {
+          success: true,
+          spreadsheetId: data.spreadsheetId,
+          spreadsheetName: data.spreadsheetName || 'Inspección Emergencias',
+          sheets,
+          message: `Sincronizadas ${sheets.length} hojas de "${data.spreadsheetName || 'Inspección Emergencias'}".`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          sheets: [],
+          message: `Error al sincronizar Inspección Emergencias: ${err?.message || 'Error de red'}`,
+        };
+      }
     }
 
-    try {
-      const separator = targetUrl.includes('?') ? '&' : '?';
-      const idParam = targetSpreadsheetId
-        ? `&spreadsheetId=${encodeURIComponent(targetSpreadsheetId)}`
-        : '';
-      const res = await fetch(`${targetUrl}${separator}action=getEmergencySheets${idParam}`, {
-        method: 'GET',
-        redirect: 'follow',
-      });
+    // OAuth fallback when user is signed in with Google
+    if (cachedAccessToken) {
+      try {
+        const file = await this.findEmergencyFileOAuth();
+        if (!file) {
+          return {
+            success: false,
+            sheets: [],
+            message: 'No se encontró el archivo "Inspección Emergencias" en Google Drive.',
+          };
+        }
 
-      if (!res.ok) {
-        throw new Error(`El servidor respondió HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.message || 'No se pudo leer el archivo Inspección Emergencias.');
-      }
-
-      const sheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
-      if (sheets.length > 0 && typeof sheets[0] === 'string') {
-        throw new Error(
-          'El Apps Script conectado devolvió solo nombres de hojas. Actualiza el script con la versión más reciente.'
+        const metaRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${file.id}?fields=properties.title,sheets.properties.title`,
+          { headers: { Authorization: `Bearer ${cachedAccessToken}` } }
         );
-      }
+        if (!metaRes.ok) throw new Error(`HTTP ${metaRes.status}`);
+        const meta = await metaRes.json();
+        const sheetTitles: string[] = (meta.sheets || []).map((s: any) => s.properties.title);
+        const sheets: EmergencySheetData[] = [];
 
-      storageService.setEmergencySheets(sheets);
-      if (data.spreadsheetId) {
-        localStorage.setItem(EMERGENCY_SPREADSHEET_ID_KEY, String(data.spreadsheetId));
-      }
-      if (data.spreadsheetName) {
-        localStorage.setItem(EMERGENCY_SPREADSHEET_NAME_KEY, String(data.spreadsheetName));
-      }
-      localStorage.setItem(EMERGENCY_LAST_SYNC_KEY, new Date().toISOString());
+        for (const title of sheetTitles) {
+          const valRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/${encodeURIComponent(title)}`,
+            { headers: { Authorization: `Bearer ${cachedAccessToken}` } }
+          );
+          if (!valRes.ok) continue;
+          const valData = await valRes.json();
+          const allRows: any[][] = valData.values || [];
+          if (allRows.length === 0) continue;
 
-      return {
-        success: true,
-        spreadsheetId: data.spreadsheetId,
-        spreadsheetName: data.spreadsheetName || 'Inspección Emergencias',
-        sheets,
-        message: `Sincronizadas ${sheets.length} hojas de "${data.spreadsheetName || 'Inspección Emergencias'}".`,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        sheets: [],
-        message: `Error al sincronizar Inspección Emergencias: ${err?.message || 'Error de red'}`,
-      };
+          const headers = allRows[0].map((h) => String(h || '').trim()).filter(Boolean);
+          if (headers.length === 0) continue;
+
+          const suggestionsMap: Record<string, Set<string>> = {};
+          headers.forEach((h) => { suggestionsMap[h] = new Set(); });
+          const parsedRows: EmergencySheetRow[] = [];
+
+          for (let r = 1; r < allRows.length; r++) {
+            const raw = allRows[r] || [];
+            const valuesObj: Record<string, string> = {};
+            let hasAny = false;
+            headers.forEach((h, cIdx) => {
+              const v = raw[cIdx] !== undefined && raw[cIdx] !== null ? String(raw[cIdx]).trim() : '';
+              if (v) hasAny = true;
+              valuesObj[h] = v;
+              if (v && !v.startsWith('data:image') && v.length <= 60) {
+                suggestionsMap[h].add(v);
+              }
+            });
+            if (!hasAny) continue;
+            parsedRows.push({
+              rowNumber: r + 1,
+              rowId: String(valuesObj[headers[0]] || `ROW-${r + 1}`),
+              values: valuesObj,
+            });
+          }
+
+          const suggestions: Record<string, string[]> = {};
+          headers.forEach((h) => {
+            const arr = Array.from(suggestionsMap[h]);
+            if (arr.length > 0 && arr.length <= 40) suggestions[h] = arr.sort();
+          });
+
+          sheets.push({
+            sheetName: title,
+            headers,
+            rows: parsedRows.reverse(),
+            suggestions,
+          });
+        }
+
+        storageService.setEmergencySheets(sheets);
+        localStorage.setItem(EMERGENCY_SPREADSHEET_ID_KEY, file.id);
+        localStorage.setItem(EMERGENCY_SPREADSHEET_NAME_KEY, meta.properties?.title || file.name);
+        localStorage.setItem(EMERGENCY_LAST_SYNC_KEY, new Date().toISOString());
+
+        return {
+          success: true,
+          spreadsheetId: file.id,
+          spreadsheetName: meta.properties?.title || file.name,
+          sheets,
+          message: `Sincronizadas ${sheets.length} hojas de "${meta.properties?.title || file.name}".`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          sheets: [],
+          message: `Error al sincronizar Inspección Emergencias con Drive: ${err?.message || 'Error de red'}`,
+        };
+      }
     }
+
+    return {
+      success: false,
+      sheets: [],
+      needsConfig: true,
+      message: 'Configura la conexión Drive para sincronizar automáticamente los formularios.',
+    };
   },
 
   async saveEmergencyRowToDrive(
@@ -1202,52 +1331,99 @@ export const googleDriveService = {
     needsConfig?: boolean;
   }> {
     const targetUrl = this.getEffectiveEmergencyAppsScriptUrl();
-    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
-      return {
-        success: false,
-        needsConfig: true,
-        message: 'Guardado localmente. Conecta el script de Inspección Emergencias para guardar en Drive.',
-      };
+    if (targetUrl && targetUrl.startsWith('https://script.google.com/')) {
+      try {
+        const spreadsheetId = this.getEmergencySpreadsheetId();
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          redirect: 'follow',
+          body: JSON.stringify({
+            action: 'appendEmergencyRow',
+            spreadsheetId,
+            sheetName,
+            rowId: row.rowId,
+            rowNumber: row.rowNumber,
+            values: row.values,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'No se pudo guardar la fila en Google Sheets.');
+        }
+
+        return {
+          success: true,
+          row: data.row,
+          rowId: data.rowId || row.rowId,
+          sheetName: data.sheetName || sheetName,
+          message: data.message || `Registro guardado en la hoja "${sheetName}" de Drive.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Guardado localmente. Error al enviar a Drive: ${err?.message || 'Verifica el script'}`,
+        };
+      }
     }
 
-    try {
-      const spreadsheetId = this.getEmergencySpreadsheetId();
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'appendEmergencyRow',
-          spreadsheetId,
-          sheetName,
+    // OAuth fallback
+    if (cachedAccessToken) {
+      try {
+        const file = await this.findEmergencyFileOAuth();
+        if (!file) throw new Error('Archivo Inspección Emergencias no encontrado en Drive.');
+        const sheet = storageService.getEmergencySheets().find((s) => s.sheetName === sheetName);
+        const headers = sheet?.headers || Object.keys(row.values);
+        const rowValues = headers.map((h) => row.values[h] ?? '');
+
+        if (row.rowNumber && row.rowNumber >= 2) {
+          const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/${encodeURIComponent(sheetName)}!A${row.rowNumber}?valueInputOption=USER_ENTERED`;
+          const uRes = await fetch(updateUrl, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${cachedAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ values: [rowValues] }),
+          });
+          if (!uRes.ok) throw new Error(`HTTP ${uRes.status}`);
+        } else {
+          const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/${encodeURIComponent(sheetName)}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+          const aRes = await fetch(appendUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${cachedAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ values: [rowValues] }),
+          });
+          if (!aRes.ok) throw new Error(`HTTP ${aRes.status}`);
+        }
+
+        return {
+          success: true,
           rowId: row.rowId,
-          rowNumber: row.rowNumber,
-          values: row.values,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+          sheetName,
+          message: `Registro guardado en la hoja "${sheetName}" de Drive.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Guardado localmente. Error en Drive: ${err?.message || 'Error de permisos'}`,
+        };
       }
-
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.message || 'No se pudo guardar la fila en Google Sheets.');
-      }
-
-      return {
-        success: true,
-        row: data.row,
-        rowId: data.rowId || row.rowId,
-        sheetName: data.sheetName || sheetName,
-        message: data.message || `Registro guardado en la hoja "${sheetName}" de Drive.`,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: `Guardado localmente. Error al enviar a Drive: ${err?.message || 'Verifica el script'}`,
-      };
     }
+
+    return {
+      success: false,
+      needsConfig: true,
+      message: 'Guardado localmente. Configura la conexión Drive para sincronizar automáticamente.',
+    };
   },
 
   async deleteEmergencyRowFromDrive(
@@ -1297,5 +1473,302 @@ export const googleDriveService = {
         message: `Eliminado localmente. Error al eliminar en Drive: ${err?.message || 'Verifica el script'}`,
       };
     }
+  },
+
+  // ============================================================================
+  // TODOS LOS FORMULARIOS SST (Registros_SST en App_SST MG / Drive)
+  // ============================================================================
+
+  async syncSSTRecordsFromDrive(): Promise<{
+    success: boolean;
+    records: SSTRecord[];
+    message: string;
+    needsConfig?: boolean;
+  }> {
+    const targetUrl = this.getAppsScriptUrl();
+
+    if (targetUrl && targetUrl.startsWith('https://script.google.com/')) {
+      try {
+        const separator = targetUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${targetUrl}${separator}action=getSSTRecords`, {
+          method: 'GET',
+          redirect: 'follow',
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'No se pudieron obtener los registros SST de Drive.');
+        }
+        const remoteRecords: SSTRecord[] = Array.isArray(data.records) ? data.records : [];
+        if (remoteRecords.length > 0) {
+          storageService.syncSSTRecordsFromRemote(remoteRecords);
+        }
+        return {
+          success: true,
+          records: remoteRecords,
+          message: `Sincronizados ${remoteRecords.length} registros SST desde "${data.spreadsheetName || 'App_SST MG'}".`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          records: [],
+          message: `Error al sincronizar formularios SST: ${err?.message || 'Error de red'}`,
+        };
+      }
+    }
+
+    if (cachedAccessToken) {
+      try {
+        const appFile = await this.findAppSSTFile(TARGET_DRIVE_FOLDER.id);
+        if (!appFile || appFile.mimeType !== 'application/vnd.google-apps.spreadsheet') {
+          return {
+            success: false,
+            records: [],
+            message: 'No se encontró el Google Sheet "App_SST MG" en Drive.',
+          };
+        }
+
+        const valRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${appFile.id}/values/${encodeURIComponent('Registros_SST')}!A2:W2000`,
+          { headers: { Authorization: `Bearer ${cachedAccessToken}` } }
+        );
+        if (!valRes.ok) {
+          return {
+            success: true,
+            records: [],
+            message: 'Hoja Registros_SST aún sin registros en Drive.',
+          };
+        }
+        const valData = await valRes.json();
+        const rows: any[][] = valData.values || [];
+        const remoteRecords: SSTRecord[] = rows
+          .filter((r) => r && (r[0] || r[2]))
+          .map((r, idx) => {
+            let evidencias: any[] = [];
+            try {
+              if (r[19]) evidencias = JSON.parse(String(r[19]));
+            } catch {
+              evidencias = [];
+            }
+            return {
+              id: String(r[0] || `rec-drive-${idx + 2}`),
+              numeroRegistro: String(r[1] || `SST-${idx + 2}`),
+              menuId: String(r[2] || ''),
+              subMenuId: String(r[3] || ''),
+              moduloNombre: String(r[4] || ''),
+              subModuloNombre: String(r[5] || ''),
+              fecha: String(r[6] || ''),
+              sedeId: String(r[7] || 'MG-MG'),
+              area: String(r[8] || ''),
+              supervisor: r[9] ? String(r[9]) : undefined,
+              cedulaTrabajador: r[10] ? String(r[10]) : undefined,
+              nombreTrabajador: r[11] ? String(r[11]) : undefined,
+              puestoTrabajador: r[12] ? String(r[12]) : undefined,
+              responsableRegistro: String(r[13] || 'Responsable SST'),
+              responsableEmail: String(r[14] || 'sst@mgconsultores.com'),
+              estado: (String(r[15] || 'EN_PROCESO') as SSTRecordStatus),
+              observaciones: String(r[16] || ''),
+              hallazgos: r[17] ? String(r[17]) : undefined,
+              accionesPropuestas: r[18] ? String(r[18]) : undefined,
+              evidencias: Array.isArray(evidencias) ? evidencias : [],
+              createdAt: String(r[20] || new Date().toISOString()),
+              updatedAt: String(r[21] || new Date().toISOString()),
+              createdBy: String(r[22] || 'Google Drive'),
+            };
+          })
+          .reverse();
+
+        if (remoteRecords.length > 0) {
+          storageService.syncSSTRecordsFromRemote(remoteRecords);
+        }
+        return {
+          success: true,
+          records: remoteRecords,
+          message: `Sincronizados ${remoteRecords.length} registros SST desde Google Drive.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          records: [],
+          message: `Error al leer registros SST de Drive: ${err?.message || 'Error de red'}`,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      records: [],
+      needsConfig: true,
+      message: 'Sin conexión Drive configurada.',
+    };
+  },
+
+  async saveSSTRecordToDrive(record: SSTRecord): Promise<{
+    success: boolean;
+    message: string;
+    needsConfig?: boolean;
+  }> {
+    const targetUrl = this.getAppsScriptUrl();
+
+    if (targetUrl && targetUrl.startsWith('https://script.google.com/')) {
+      try {
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          redirect: 'follow',
+          body: JSON.stringify({
+            action: 'appendSSTRecord',
+            record,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'No se pudo guardar el registro SST en Drive.');
+        }
+        return {
+          success: true,
+          message: data.message || `Registro guardado automáticamente en Google Drive (${record.subModuloNombre}).`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Guardado localmente. Error al sincronizar con Drive: ${err?.message || 'Verifica el script'}`,
+        };
+      }
+    }
+
+    if (cachedAccessToken) {
+      try {
+        const appFile = await this.findAppSSTFile(TARGET_DRIVE_FOLDER.id);
+        if (!appFile || appFile.mimeType !== 'application/vnd.google-apps.spreadsheet') {
+          throw new Error('Archivo App_SST MG no encontrado en Drive.');
+        }
+
+        const rowValues = [
+          record.id,
+          record.numeroRegistro,
+          record.menuId,
+          record.subMenuId,
+          record.moduloNombre,
+          record.subModuloNombre,
+          record.fecha,
+          record.sedeId,
+          record.area,
+          record.supervisor || '',
+          record.cedulaTrabajador || '',
+          record.nombreTrabajador || '',
+          record.puestoTrabajador || '',
+          record.responsableRegistro,
+          record.responsableEmail,
+          record.estado,
+          record.observaciones,
+          record.hallazgos || '',
+          record.accionesPropuestas || '',
+          record.evidencias && record.evidencias.length > 0 ? JSON.stringify(record.evidencias) : '',
+          record.createdAt,
+          record.updatedAt,
+          record.createdBy,
+        ];
+
+        const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${appFile.id}/values/${encodeURIComponent('Registros_SST')}!A:W:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const aRes = await fetch(appendUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cachedAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ values: [rowValues] }),
+        });
+        if (!aRes.ok) throw new Error(`HTTP ${aRes.status}`);
+
+        return {
+          success: true,
+          message: `Registro guardado automáticamente en Google Drive (${record.subModuloNombre}).`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Guardado localmente. Error al escribir en Drive: ${err?.message || 'Error de permisos'}`,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      needsConfig: true,
+      message: 'Guardado localmente. Configura la conexión Drive para sincronizar automáticamente.',
+    };
+  },
+
+  async deleteSSTRecordFromDrive(
+    record: Pick<SSTRecord, 'id' | 'numeroRegistro'>
+  ): Promise<{ success: boolean; message: string }> {
+    const targetUrl = this.getAppsScriptUrl();
+    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        message: 'Eliminado localmente (sin conexión Drive configurada).',
+      };
+    }
+
+    try {
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'deleteSSTRecord',
+          id: record.id,
+          numeroRegistro: record.numeroRegistro,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'No se pudo eliminar de Drive.');
+      }
+      return {
+        success: true,
+        message: data.message || 'Registro eliminado de Google Drive.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Eliminado localmente. Error al eliminar en Drive: ${err?.message || 'Verifica el script'}`,
+      };
+    }
+  },
+
+  /**
+   * Sincronización automática unificada para TODOS los formularios y módulos de Drive
+   */
+  async syncAllFormsFromDrive(): Promise<{ success: boolean; message: string }> {
+    if (!this.isConnectedAutomatically()) {
+      return {
+        success: false,
+        message: 'No hay conexión Drive configurada aún.',
+      };
+    }
+
+    const tasks: Promise<any>[] = [];
+    if (this.isAppsScriptConfigured()) {
+      tasks.push(this.syncFromAppsScript().catch(() => null));
+    } else if (this.isAuthenticated()) {
+      tasks.push(this.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id).catch(() => null));
+      tasks.push(this.fetchDeliveriesFromDrive().catch(() => null));
+    }
+
+    if (this.isEmergencyDriveConfigured()) {
+      tasks.push(this.syncEmergencySheetsFromDrive().catch(() => null));
+    }
+
+    tasks.push(this.syncSSTRecordsFromDrive().catch(() => null));
+
+    await Promise.allSettled(tasks);
+    return {
+      success: true,
+      message: 'Todos los formularios sincronizados automáticamente con Google Drive.',
+    };
   },
 };

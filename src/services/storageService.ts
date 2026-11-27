@@ -1051,6 +1051,17 @@ export const storageService = {
     return true;
   },
 
+  syncSSTRecordsFromRemote(remoteRecords: SSTRecord[]) {
+    if (!Array.isArray(remoteRecords)) return;
+    const cleaned = remoteRecords.filter(
+      (r) =>
+        !LEGACY_FAKE_WORKER_CEDULAS.has(String(r.cedulaTrabajador || '').trim()) &&
+        !LEGACY_FAKE_SUPERVISOR_NAMES.has(String(r.supervisor || '').trim().toUpperCase())
+    );
+    localStorage.setItem(KEYS.RECORDS, JSON.stringify(cleaned));
+    this.notify();
+  },
+
   // ---------------- HOJA OFICIAL: ENTREGA EPP'S MG ----------------
   getEntregaEPPRecords(filters?: {
     sedeId?: string;

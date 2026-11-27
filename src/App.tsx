@@ -45,14 +45,21 @@ function MainApp() {
   const [activeView, setActiveView] = useState('epp_delivery');
   const [activeEmergencySubMenuId, setActiveEmergencySubMenuId] = useState('sub-em-1');
 
-  // Automatic background sync with Google Drive when app is active
+  // Automatic background sync with Google Drive across all forms when app is active
   React.useEffect(() => {
     if (!isAuthenticated) return;
-    if (googleDriveService.isAppsScriptConfigured()) {
-      googleDriveService.syncFromAppsScript().catch(() => {});
-    } else if (googleDriveService.isAuthenticated()) {
-      googleDriveService.syncUsersFromDrive(TARGET_DRIVE_FOLDER.id).catch(() => {});
-    }
+    const runAutoSync = () => {
+      if (googleDriveService.isConnectedAutomatically()) {
+        googleDriveService.syncAllFormsFromDrive().catch(() => {});
+      }
+    };
+    runAutoSync();
+    window.addEventListener('mg-sst-apps-script-updated', runAutoSync);
+    window.addEventListener('mg-sst-emergency-script-updated', runAutoSync);
+    return () => {
+      window.removeEventListener('mg-sst-apps-script-updated', runAutoSync);
+      window.removeEventListener('mg-sst-emergency-script-updated', runAutoSync);
+    };
   }, [isAuthenticated]);
 
   if (!isAuthenticated) {

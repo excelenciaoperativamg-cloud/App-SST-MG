@@ -84,7 +84,10 @@ export const AppsScriptConnectionModal: React.FC<AppsScriptConnectionModalProps>
 
       googleDriveService.setAppsScriptUrl(cleanUrl);
       const syncRes = await googleDriveService.syncFromAppsScript(cleanUrl);
-      const finalMsg = syncRes.success ? syncRes.message : testRes.message;
+      await googleDriveService.syncAllFormsFromDrive().catch(() => null);
+      const finalMsg = syncRes.success
+        ? `${syncRes.message} Conexión automática activada para todos los formularios.`
+        : testRes.message;
       setStatus({ type: 'success', message: finalMsg });
       if (onConnected) {
         onConnected(finalMsg);
@@ -122,7 +125,7 @@ export const AppsScriptConnectionModal: React.FC<AppsScriptConnectionModalProps>
                 Conexión Automática sin Pop-ups
               </span>
               <h2 className="text-lg font-bold text-white mt-1">
-                Script de Conexión Automática — Entrega Epp´s MG
+                Conexión Automática Google Drive — Todos los Formularios
               </h2>
             </div>
           </div>

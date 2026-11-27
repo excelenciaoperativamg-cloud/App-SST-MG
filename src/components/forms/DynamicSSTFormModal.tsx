@@ -11,12 +11,14 @@ import {
   Camera,
   Trash2,
   CheckCircle,
+  Loader2,
 } from 'lucide-react';
 import { useSST } from '../../context/SSTContext';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_SEDES, SST_MODULES } from '../../config/constants';
 import { CATALOGO_AREAS } from '../../types/epp';
 import { storageService } from '../../services/storageService';
+import { googleDriveService } from '../../services/googleDriveService';
 import { SSTRecord, SSTRecordStatus, EvidenciaArchivo } from '../../types';
 
 interface DynamicSSTFormModalProps {
@@ -25,7 +27,10 @@ interface DynamicSSTFormModalProps {
   recordToEdit?: SSTRecord | null;
   initialMenuId?: string;
   initialSubMenuId?: string;
-  onSaved: (record: SSTRecord) => void;
+  onSaved: (
+    record: SSTRecord,
+    driveSyncResult?: { success: boolean; message: string; needsConfig?: boolean }
+  ) => void;
 }
 
 export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
@@ -58,6 +63,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
   const [accionesPropuestas, setAccionesPropuestas] = useState<string>('');
   const [evidencias, setEvidencias] = useState<EvidenciaArchivo[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync when editing an existing record
   useEffect(() => {
@@ -167,12 +173,16 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
     setEvidencias((prev) => prev.filter((ev) => ev.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!observaciones.trim()) {
       setErrorMsg('Las observaciones y descripción de la actividad son obligatorias.');
       return;
     }
+
+    setIsSaving(true);
+    setErrorMsg(null);
 
     const correlative = Math.floor(100 + Math.random() * 900);
     const prefix = currentSub.codigo || 'SST';
@@ -204,9 +214,17 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       createdBy: recordToEdit?.createdBy || user?.email || 'sistema',
     };
 
-    saveRecord(newRecord);
-    onSaved(newRecord);
-    onClose();
+    try {
+      saveRecord(newRecord);
+      let driveResult: { success: boolean; message: string; needsConfig?: boolean } | undefined;
+      if (googleDriveService.isConnectedAutomatically()) {
+        driveResult = await googleDriveService.saveSSTRecordToDrive(newRecord);
+      }
+      onSaved(newRecord, driveResult);
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -549,10 +567,20 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
           <button
             type="button"
             onClick={handleSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#E60000] px-5 py-2 text-xs font-bold text-white hover:bg-red-700 shadow-md"
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#E60000] px-5 py-2 text-xs font-bold text-white hover:bg-red-700 shadow-md disabled:opacity-60 cursor-pointer"
           >
-            <Save className="h-4 w-4" />
-            <span>Guardar Registro SST</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                <span>Guardar Registro SST</span>
+              </>
+            )}
           </button>
         </div>
       </div>

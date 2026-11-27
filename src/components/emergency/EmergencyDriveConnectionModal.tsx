@@ -104,6 +104,7 @@ export const EmergencyDriveConnectionModal: React.FC<EmergencyDriveConnectionMod
       if (res.spreadsheetId && !spreadsheetInput.trim()) {
         setSpreadsheetInput(res.spreadsheetId);
       }
+      googleDriveService.syncAllFormsFromDrive().catch(() => null);
       setStatus({ type: 'success', message: res.message });
       if (onSynced) {
         onSynced(res.sheets, res.message);

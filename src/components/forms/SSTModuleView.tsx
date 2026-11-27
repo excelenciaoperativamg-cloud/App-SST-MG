@@ -24,6 +24,7 @@ import { EmergencySheetData, EmergencySheetRow } from '../../types/emergency';
 import { DynamicSSTFormModal } from './DynamicSSTFormModal';
 import { EmergencyDriveConnectionModal } from '../emergency/EmergencyDriveConnectionModal';
 import { EmergencySheetFormModal } from '../emergency/EmergencySheetFormModal';
+import { AppsScriptConnectionModal } from '../epp/AppsScriptConnectionModal';
 
 interface SSTModuleViewProps {
   moduleId: string;
@@ -103,6 +104,7 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
     message: string;
   } | null>(null);
   const [isEmergencyDriveModalOpen, setIsEmergencyDriveModalOpen] = useState(false);
+  const [isUnifiedDriveModalOpen, setIsUnifiedDriveModalOpen] = useState(false);
   const [isEmergencyFormOpen, setIsEmergencyFormOpen] = useState(false);
   const [emergencyRowToEdit, setEmergencyRowToEdit] = useState<EmergencySheetRow | null>(null);
 
@@ -130,38 +132,71 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
     refresh();
     window.addEventListener('mg-sst-data-change', refresh);
     window.addEventListener('mg-sst-emergency-script-updated', refresh);
+    window.addEventListener('mg-sst-apps-script-updated', refresh);
     return () => {
       window.removeEventListener('mg-sst-data-change', refresh);
       window.removeEventListener('mg-sst-emergency-script-updated', refresh);
+      window.removeEventListener('mg-sst-apps-script-updated', refresh);
     };
   }, []);
 
-  const handleSyncEmergencyDrive = useCallback(async (silent = false) => {
+  const handleSyncModuleDrive = useCallback(async (silent = false) => {
     setIsSyncingDrive(true);
     if (!silent) setDriveBanner(null);
-    const res = await googleDriveService.syncEmergencySheetsFromDrive();
+
+    if (isEmergencyModule) {
+      const [emRes] = await Promise.all([
+        googleDriveService.syncEmergencySheetsFromDrive(),
+        googleDriveService.syncSSTRecordsFromDrive().catch(() => null),
+      ]);
+      setIsSyncingDrive(false);
+
+      if (emRes.success) {
+        setEmergencySheets(emRes.sheets);
+        if (!silent) {
+          setDriveBanner({ type: 'success', message: emRes.message });
+        }
+      } else if (!silent) {
+        if (emRes.needsConfig) {
+          setIsEmergencyDriveModalOpen(true);
+        } else {
+          setDriveBanner({ type: 'error', message: emRes.message });
+        }
+      }
+      return;
+    }
+
+    const sstRes = await googleDriveService.syncSSTRecordsFromDrive();
     setIsSyncingDrive(false);
 
-    if (res.success) {
-      setEmergencySheets(res.sheets);
+    if (sstRes.success) {
       if (!silent) {
-        setDriveBanner({ type: 'success', message: res.message });
+        setDriveBanner({ type: 'success', message: sstRes.message });
       }
     } else if (!silent) {
-      if (res.needsConfig) {
-        setIsEmergencyDriveModalOpen(true);
+      if (sstRes.needsConfig) {
+        setIsUnifiedDriveModalOpen(true);
       } else {
-        setDriveBanner({ type: 'error', message: res.message });
+        setDriveBanner({ type: 'error', message: sstRes.message });
       }
     }
-  }, []);
+  }, [isEmergencyModule]);
 
-  // Auto-sync silently on module open if configured
+  // Auto-sync silently on module open or when Drive connection updates
   useEffect(() => {
-    if (isEmergencyModule && googleDriveService.isEmergencyDriveConfigured()) {
-      handleSyncEmergencyDrive(true);
-    }
-  }, [isEmergencyModule, handleSyncEmergencyDrive]);
+    const syncIfConnected = () => {
+      if (googleDriveService.isConnectedAutomatically()) {
+        handleSyncModuleDrive(true);
+      }
+    };
+    syncIfConnected();
+    window.addEventListener('mg-sst-apps-script-updated', syncIfConnected);
+    window.addEventListener('mg-sst-emergency-script-updated', syncIfConnected);
+    return () => {
+      window.removeEventListener('mg-sst-apps-script-updated', syncIfConnected);
+      window.removeEventListener('mg-sst-emergency-script-updated', syncIfConnected);
+    };
+  }, [handleSyncModuleDrive]);
 
   // Build unified tabs: official submenus + any extra sheets discovered in Drive workbook
   const moduleTabs = useMemo(() => {
@@ -358,8 +393,17 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
       return;
     }
 
+    const targetRec = records.find((r) => r.id === deleteTarget.id);
     deleteRecord(deleteTarget.id);
     setDeleteTarget(null);
+
+    if (targetRec && googleDriveService.isConnectedAutomatically()) {
+      const remoteRes = await googleDriveService.deleteSSTRecordFromDrive(targetRec);
+      setDriveBanner({
+        type: remoteRes.success ? 'success' : 'error',
+        message: remoteRes.message,
+      });
+    }
   };
 
   const getStatusBadge = (status: SSTRecordStatus) => {
@@ -421,6 +465,7 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
   };
 
   const isEmergencyDriveConnected = googleDriveService.isEmergencyDriveConfigured();
+  const isUnifiedDriveConnected = googleDriveService.isConnectedAutomatically();
   const activeCount = linkedSheet ? filteredEmergencyRows.length : filteredRecords.length;
 
   return (
@@ -436,11 +481,11 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-            {isEmergencyModule && canEdit() && (
+            {canEdit() && (
               <>
                 <button
                   type="button"
-                  onClick={() => handleSyncEmergencyDrive(false)}
+                  onClick={() => handleSyncModuleDrive(false)}
                   disabled={isSyncingDrive}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 px-3.5 py-2.5 text-xs font-bold text-white transition-all cursor-pointer disabled:opacity-60"
                 >
@@ -449,11 +494,19 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsEmergencyDriveModalOpen(true)}
+                  onClick={() =>
+                    isEmergencyModule
+                      ? setIsEmergencyDriveModalOpen(true)
+                      : setIsUnifiedDriveModalOpen(true)
+                  }
                   className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 px-3.5 py-2.5 text-xs font-bold text-slate-950 shadow-md transition-all cursor-pointer"
                 >
                   <Link2 className="h-4 w-4" />
-                  <span>{isEmergencyDriveConnected ? 'Configurar Drive' : 'Conectar Drive Emergencias'}</span>
+                  <span>
+                    {(isEmergencyModule ? isEmergencyDriveConnected : isUnifiedDriveConnected)
+                      ? 'Configurar Drive'
+                      : 'Conectar Drive'}
+                  </span>
                 </button>
               </>
             )}
@@ -473,7 +526,7 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
       </div>
 
       {/* Drive Sync Banner */}
-      {isEmergencyModule && driveBanner && (
+      {driveBanner && (
         <div
           className={`rounded-xl border p-3.5 text-xs font-semibold flex items-center justify-between gap-3 ${
             driveBanner.type === 'success'
@@ -499,8 +552,8 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
         </div>
       )}
 
-      {/* Prompt to connect Inspección Emergencias if no sheets synced yet */}
-      {isEmergencyModule && emergencySheets.length === 0 && canEdit() && (
+      {/* Prompt to connect Inspección Emergencias only if Drive is not connected yet */}
+      {isEmergencyModule && emergencySheets.length === 0 && canEdit() && !isEmergencyDriveConnected && !isSyncingDrive && (
         <div className="rounded-xl border border-orange-200 bg-orange-50/80 p-4 text-xs text-orange-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-start gap-3">
             <FileSpreadsheet className="h-5 w-5 text-[#EA580C] flex-shrink-0 mt-0.5" />
@@ -997,8 +1050,27 @@ export const SSTModuleView: React.FC<SSTModuleViewProps> = ({
         recordToEdit={recordToEdit}
         initialMenuId={moduleId}
         initialSubMenuId={activeTab?.id || activeSubMenuId}
-        onSaved={() => {}}
+        onSaved={(_rec, driveResult) => {
+          if (driveResult) {
+            setDriveBanner({
+              type: driveResult.success ? 'success' : 'error',
+              message: driveResult.message,
+            });
+          }
+        }}
       />
+
+      {/* Unified Drive Connection Modal for Standard SST Modules */}
+      {!isEmergencyModule && (
+        <AppsScriptConnectionModal
+          isOpen={isUnifiedDriveModalOpen}
+          onClose={() => setIsUnifiedDriveModalOpen(false)}
+          onConnected={(message) => {
+            setDriveBanner({ type: 'success', message });
+            handleSyncModuleDrive(true);
+          }}
+        />
+      )}
 
       {/* Google Drive Emergency Connection Modal */}
       {isEmergencyModule && (

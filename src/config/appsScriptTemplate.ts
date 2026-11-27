@@ -233,6 +233,29 @@ function readDeliveries_(ss) {
 }
 
 /**
+ * Obtiene o busca el libro principal "App_SST MG" en la carpeta App_SST MG.V2
+ */
+function getAppSstSpreadsheet_() {
+  try {
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      const f = files.next();
+      const name = f.getName().toLowerCase();
+      if (
+        (name.indexOf('app_sst mg') !== -1 || name.indexOf('app_sst') !== -1) &&
+        f.getMimeType() === MimeType.GOOGLE_SHEETS
+      ) {
+        return SpreadsheetApp.openById(f.getId());
+      }
+    }
+  } catch (err) {
+    // Fallback al libro objetivo
+  }
+  return getTargetSpreadsheet_();
+}
+
+/**
  * Busca el archivo "App_SST MG" en la carpeta App_SST MG.V2 para leer Maestro y Usuario
  */
 function readAppSstMgData_() {
@@ -428,8 +451,111 @@ function readEmergencyWorkbook_(ss) {
   return result;
 }
 
+const SST_RECORDS_HEADERS = [
+  'Id',
+  'NumeroRegistro',
+  'MenuId',
+  'SubMenuId',
+  'Modulo',
+  'Submodulo',
+  'Fecha',
+  'Sede',
+  'Area',
+  'Supervisor',
+  'CedulaTrabajador',
+  'NombreTrabajador',
+  'PuestoTrabajador',
+  'ResponsableRegistro',
+  'ResponsableEmail',
+  'Estado',
+  'Observaciones',
+  'Hallazgos',
+  'AccionesPropuestas',
+  'Evidencias',
+  'CreatedAt',
+  'UpdatedAt',
+  'CreatedBy',
+];
+
+function getOrCreateSSTRecordsSheet_(ss, createIfMissing) {
+  let sheet = findSheet_(ss, ['Registros_SST', 'Registros SST', 'SST_Registros']);
+  if (!sheet && createIfMissing) {
+    sheet = ss.insertSheet('Registros_SST');
+    sheet.getRange(1, 1, 1, SST_RECORDS_HEADERS.length).setValues([SST_RECORDS_HEADERS]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function readSSTRecords_(ss) {
+  const tz = ss.getSpreadsheetTimeZone();
+  const sheet = getOrCreateSSTRecordsSheet_(ss, false);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const lastRow = sheet.getLastRow();
+  const numCols = Math.max(sheet.getLastColumn(), SST_RECORDS_HEADERS.length);
+  const data = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  const records = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const r = data[i];
+    const id = String(r[0] || '').trim();
+    const menuId = String(r[2] || '').trim();
+    const subMenuId = String(r[3] || '').trim();
+    if (!id && !menuId) continue;
+
+    let evidencias = [];
+    const rawEv = String(r[19] || '').trim();
+    if (rawEv) {
+      try {
+        const parsedEv = JSON.parse(rawEv);
+        if (Array.isArray(parsedEv)) evidencias = parsedEv;
+      } catch (err) {
+        evidencias = rawEv.split(',').map(function (item, idx) {
+          const cleanItem = item.trim();
+          return {
+            id: 'ev-drive-' + i + '-' + idx,
+            nombre: cleanItem.split('/').pop() || 'Evidencia',
+            url: cleanItem,
+            tipo: 'image/jpeg',
+            fecha: formatDateISO_(r[6], tz),
+          };
+        }).filter(function (ev) { return Boolean(ev.url); });
+      }
+    }
+
+    records.push({
+      id: id || ('rec-drive-' + (i + 2)),
+      numeroRegistro: String(r[1] || ('SST-' + (i + 2))).trim(),
+      menuId: menuId,
+      subMenuId: subMenuId,
+      moduloNombre: String(r[4] || '').trim(),
+      subModuloNombre: String(r[5] || '').trim(),
+      fecha: formatDateISO_(r[6], tz),
+      sedeId: String(r[7] || 'MG-MG').trim(),
+      area: String(r[8] || '').trim(),
+      supervisor: String(r[9] || '').trim() || undefined,
+      cedulaTrabajador: String(r[10] || '').trim() || undefined,
+      nombreTrabajador: String(r[11] || '').trim() || undefined,
+      puestoTrabajador: String(r[12] || '').trim() || undefined,
+      responsableRegistro: String(r[13] || 'Responsable SST').trim(),
+      responsableEmail: String(r[14] || 'sst@mgconsultores.com').trim(),
+      estado: String(r[15] || 'EN_PROCESO').trim(),
+      observaciones: String(r[16] || '').trim(),
+      hallazgos: String(r[17] || '').trim() || undefined,
+      accionesPropuestas: String(r[18] || '').trim() || undefined,
+      evidencias: evidencias,
+      createdAt: String(r[20] || new Date().toISOString()).trim(),
+      updatedAt: String(r[21] || new Date().toISOString()).trim(),
+      createdBy: String(r[22] || 'Google Drive').trim(),
+    });
+  }
+
+  return records.reverse();
+}
+
 /**
- * Endpoint GET - Sincronización automática de catálogos y registros
+ * Endpoint GET - Sincronización automática de catálogos y registros de todos los formularios
  */
 function doGet(e) {
   try {
@@ -448,12 +574,24 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'getSSTRecords') {
+      const appSs = getAppSstSpreadsheet_();
+      const sstRecords = readSSTRecords_(appSs);
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        spreadsheetId: appSs.getId(),
+        spreadsheetName: appSs.getName(),
+        records: sstRecords,
+        timestamp: new Date().toISOString(),
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const ss = getTargetSpreadsheet_();
 
     if (action === 'ping') {
       return ContentService.createTextOutput(JSON.stringify({
         success: true,
-        app: 'Entrega Epp´s MG - SG-SST',
+        app: 'SG-SST MG Consultores - Conexión Unificada',
         spreadsheetName: ss.getName(),
         sheets: ss.getSheets().map(function (s) { return s.getName(); }),
         timestamp: new Date().toISOString(),
@@ -466,6 +604,12 @@ function doGet(e) {
     const areas = readSingleColumnCatalog_(ss, ['Area', 'Areas', 'Área']);
     const tiposEntrega = readSingleColumnCatalog_(ss, ['Tipo_Entrega', 'Tipo Entrega', 'Tipos']);
     const appSstData = readAppSstMgData_();
+    let sstRecords = [];
+    try {
+      sstRecords = readSSTRecords_(getAppSstSpreadsheet_());
+    } catch (err) {
+      sstRecords = [];
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -477,6 +621,7 @@ function doGet(e) {
       tiposEntrega: tiposEntrega,
       maestro: appSstData.maestro,
       usuarios: appSstData.usuarios,
+      sstRecords: sstRecords,
       timestamp: new Date().toISOString(),
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -592,6 +737,124 @@ function doPost(e) {
         rowId: rowIdVal,
         sheetName: targetSheet.getName(),
         message: 'Registro guardado en la hoja "' + targetSheet.getName() + '" (Inspección Emergencias).',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'appendSSTRecord' || action === 'deleteSSTRecord') {
+      const appSs = getAppSstSpreadsheet_();
+      const recSheet = getOrCreateSSTRecordsSheet_(appSs, action === 'appendSSTRecord');
+
+      if (action === 'deleteSSTRecord') {
+        if (!recSheet) {
+          return ContentService.createTextOutput(JSON.stringify({
+            success: true,
+            deleted: false,
+            message: 'No existe hoja Registros_SST en Drive aún.',
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+        const targetId = String(body.id || '').trim();
+        const targetNum = String(body.numeroRegistro || '').trim();
+        let deletedRow = -1;
+        const lastRowSst = recSheet.getLastRow();
+        if (lastRowSst >= 2) {
+          const ids = recSheet.getRange(2, 1, lastRowSst - 1, 2).getValues();
+          for (let i = 0; i < ids.length; i++) {
+            const cId = String(ids[i][0] || '').trim();
+            const cNum = String(ids[i][1] || '').trim();
+            if ((targetId && cId === targetId) || (targetNum && cNum === targetNum)) {
+              deletedRow = i + 2;
+              recSheet.deleteRow(deletedRow);
+              break;
+            }
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          deleted: deletedRow !== -1,
+          row: deletedRow,
+          sheetName: recSheet.getName(),
+          message: deletedRow !== -1
+            ? 'Registro eliminado de "' + recSheet.getName() + '" en Drive.'
+            : 'El registro ya no estaba en Drive.',
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const rec = body.record || body;
+      if (!rec || !rec.menuId) {
+        throw new Error('Faltan datos del registro SST para guardar en Drive.');
+      }
+
+      const stampSst = Utilities.formatDate(new Date(), appSs.getSpreadsheetTimeZone(), 'dd-MM-yyyy-HHmmss');
+      const rawEvList = Array.isArray(rec.evidencias) ? rec.evidencias : [];
+      const savedEvList = rawEvList.map(function (ev, idx) {
+        let evUrl = ev && ev.url ? String(ev.url) : '';
+        if (evUrl.startsWith('data:image')) {
+          const safeMod = normalizeSheetName_(rec.subModuloNombre || rec.moduloNombre || 'sst').replace(/[^a-z0-9]/g, '_');
+          evUrl = saveBase64ImageToDrive_(evUrl, stampSst + '_' + safeMod + '_' + idx + '.jpg');
+        }
+        return {
+          id: (ev && ev.id) || ('ev-' + idx),
+          nombre: (ev && ev.nombre) || ('Evidencia_' + (idx + 1)),
+          url: evUrl,
+          tipo: (ev && ev.tipo) || 'image/jpeg',
+          tamanoKb: (ev && ev.tamanoKb) || undefined,
+          fecha: (ev && ev.fecha) || rec.fecha,
+        };
+      });
+
+      const recRow = [
+        String(rec.id || ('rec-' + Date.now())).trim(),
+        String(rec.numeroRegistro || '').trim(),
+        String(rec.menuId || '').trim(),
+        String(rec.subMenuId || '').trim(),
+        String(rec.moduloNombre || '').trim(),
+        String(rec.subModuloNombre || '').trim(),
+        formatDateSheets_(rec.fecha),
+        String(rec.sedeId || 'MG-MG').trim(),
+        String(rec.area || '').trim(),
+        String(rec.supervisor || '').trim(),
+        String(rec.cedulaTrabajador || '').trim(),
+        String(rec.nombreTrabajador || '').trim(),
+        String(rec.puestoTrabajador || '').trim(),
+        String(rec.responsableRegistro || '').trim(),
+        String(rec.responsableEmail || '').trim(),
+        String(rec.estado || 'EN_PROCESO').trim(),
+        String(rec.observaciones || '').trim(),
+        String(rec.hallazgos || '').trim(),
+        String(rec.accionesPropuestas || '').trim(),
+        savedEvList.length > 0 ? JSON.stringify(savedEvList) : '',
+        String(rec.createdAt || new Date().toISOString()).trim(),
+        String(rec.updatedAt || new Date().toISOString()).trim(),
+        String(rec.createdBy || '').trim(),
+      ];
+
+      let targetSstRow = -1;
+      const lastRowSst = recSheet.getLastRow();
+      if (lastRowSst >= 2) {
+        const existing = recSheet.getRange(2, 1, lastRowSst - 1, 2).getValues();
+        for (let i = 0; i < existing.length; i++) {
+          const cId = String(existing[i][0] || '').trim();
+          const cNum = String(existing[i][1] || '').trim();
+          if ((recRow[0] && cId === recRow[0]) || (recRow[1] && cNum === recRow[1])) {
+            targetSstRow = i + 2;
+            break;
+          }
+        }
+      }
+
+      if (targetSstRow !== -1) {
+        recSheet.getRange(targetSstRow, 1, 1, recRow.length).setValues([recRow]);
+      } else {
+        recSheet.appendRow(recRow);
+        targetSstRow = recSheet.getLastRow();
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        row: targetSstRow,
+        id: recRow[0],
+        sheetName: recSheet.getName(),
+        message: 'Registro guardado automáticamente en "' + recSheet.getName() + '" (' + appSs.getName() + ').',
       })).setMimeType(ContentService.MimeType.JSON);
     }
 

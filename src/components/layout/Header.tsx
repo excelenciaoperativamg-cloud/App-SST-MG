@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useSST } from '../../context/SSTContext';
 import { ROLES, INITIAL_SEDES } from '../../config/constants';
+import { googleDriveService } from '../../services/googleDriveService';
 import { MGLogo } from '../common/MGLogo';
 
 interface HeaderProps {
@@ -23,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const { user, activeSiteId, switchSite, logout } = useAuth();
   const { stats, refreshData } = useSST();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const roleInfo = user ? ROLES[user.role] : ROLES.viewer;
   const isAdmin = user?.role === 'admin';
@@ -80,11 +82,22 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       <div className="flex items-center gap-3 sm:gap-4">
         {/* Refresh button */}
         <button
-          onClick={refreshData}
-          title="Actualizar datos del sistema"
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0A2958] transition-colors"
+          onClick={async () => {
+            refreshData();
+            if (googleDriveService.isConnectedAutomatically() && !isSyncing) {
+              setIsSyncing(true);
+              try {
+                await googleDriveService.syncAllFormsFromDrive();
+                refreshData();
+              } finally {
+                setIsSyncing(false);
+              }
+            }
+          }}
+          title="Actualizar y sincronizar datos con Google Drive"
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0A2958] transition-colors cursor-pointer"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-[#0A2958]' : ''}`} />
         </button>
 
         {/* Role Badge */}
