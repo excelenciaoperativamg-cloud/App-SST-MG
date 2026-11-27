@@ -15,7 +15,7 @@ import {
 import { personnelService } from '../../services/personnelService';
 import { storageService } from '../../services/storageService';
 import { useAuth } from '../../context/AuthContext';
-import { MasterImportDiff, MasterImportHistory } from '../../types';
+import { MasterImportDiff } from '../../types';
 
 interface ExcelMasterUpdateModalProps {
   isOpen: boolean;
@@ -87,28 +87,10 @@ export const ExcelMasterUpdateModal: React.FC<ExcelMasterUpdateModalProps> = ({
       }
 
       // 2. If full replacement and user confirmed inactive marking
-      let markedInactiveCount = 0;
       if (isFullReplacement && confirmInactive && diff.missingInFile.length > 0) {
         const cedulasToMark = diff.missingInFile.map((w) => w.cedula);
         storageService.markWorkersInactive(cedulasToMark, auditUser);
-        markedInactiveCount = cedulasToMark.length;
       }
-
-      // 3. Save import history log
-      const historyEntry: MasterImportHistory = {
-        id: 'imp-' + Date.now(),
-        fecha: new Date().toISOString(),
-        usuarioEmail: user.email,
-        usuarioNombre: user.displayName,
-        nombreArchivo: file?.name || 'Maestro_Actualizado.xlsx',
-        tipoCarga: isFullReplacement ? 'COMPLETA' : 'PARCIAL',
-        totalLeidos: diff.totalInFile,
-        nuevos: diff.newWorkers.length,
-        actualizados: diff.updatedWorkers.length,
-        marcadosInactivos: markedInactiveCount,
-        erroresCount: diff.validationErrors.length,
-      };
-      storageService.saveImportHistory(historyEntry);
 
       onSuccess();
       onClose();
@@ -154,7 +136,7 @@ export const ExcelMasterUpdateModal: React.FC<ExcelMasterUpdateModalProps> = ({
                 Paso 1: Descarga la Plantilla Oficial de Excel
               </h3>
               <p className="text-xs text-slate-600 mt-0.5">
-                Utiliza las columnas requeridas: Cédula, Nombre, Fecha Nacimiento, Edad, Género, Sede, Fecha Ingreso, Puesto, EPS, ARL.
+                Utiliza las columnas requeridas: Cédula, Nombre, Fecha Nacimiento, Edad, Género, Sede, Fecha Ingreso, Cargo.
               </p>
             </div>
             <button

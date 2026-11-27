@@ -777,6 +777,7 @@ export const storageService = {
 
       // Compact any bloated audit logs from previous sessions
       auditService.compactLogs();
+      localStorage.removeItem(KEYS.IMPORT_HISTORY);
     } catch {
       // Ignore parse errors
     }
@@ -1006,7 +1007,42 @@ export const storageService = {
 
   replaceWorkersFromRemote(remoteWorkers: PersonnelWorker[]) {
     if (!Array.isArray(remoteWorkers) || remoteWorkers.length === 0) return;
-    const cleaned = remoteWorkers.filter((w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula).trim()));
+    const existingMap = new Map(this.getWorkers().map((w) => [String(w.cedula).trim(), w]));
+    const cleaned = remoteWorkers
+      .filter((w) => !LEGACY_FAKE_WORKER_CEDULAS.has(String(w.cedula).trim()))
+      .map((w) => {
+        const prev = existingMap.get(String(w.cedula).trim());
+        const hasRemoteBirth = Boolean(w.fechaNacimiento && String(w.fechaNacimiento).trim());
+        const hasRemoteJoin = Boolean(w.fechaIngreso && String(w.fechaIngreso).trim());
+        const hasRemoteAge = typeof w.edad === 'number' && w.edad > 0;
+
+        const fechaNacimiento = hasRemoteBirth ? String(w.fechaNacimiento).trim() : (prev?.fechaNacimiento || '');
+        const fechaIngreso = hasRemoteJoin ? String(w.fechaIngreso).trim() : (prev?.fechaIngreso || '');
+
+        let edad = hasRemoteAge ? w.edad : (prev?.edad && prev.edad > 0 ? prev.edad : 0);
+        if ((!edad || edad <= 0) && fechaNacimiento && /^\d{4}-\d{2}-\d{2}/.test(fechaNacimiento)) {
+          const [y, m, d] = fechaNacimiento.split('-').map(Number);
+          const today = new Date();
+          let calc = today.getFullYear() - y;
+          if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) {
+            calc--;
+          }
+          if (calc > 0 && calc < 110) edad = calc;
+        }
+
+        const genero =
+          hasRemoteBirth || hasRemoteAge
+            ? w.genero || prev?.genero || 'M'
+            : prev?.genero || w.genero || 'M';
+
+        return {
+          ...w,
+          fechaNacimiento,
+          fechaIngreso,
+          edad,
+          genero,
+        };
+      });
     this.safeSetItem(KEYS.PERSONNEL, JSON.stringify(cleaned));
     this.notify();
   },
@@ -1512,19 +1548,11 @@ export const storageService = {
 
   // ---------------- IMPORT HISTORY ----------------
   getImportHistory(): MasterImportHistory[] {
-    try {
-      const stored = localStorage.getItem(KEYS.IMPORT_HISTORY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
+    return [];
   },
 
-  saveImportHistory(entry: MasterImportHistory) {
-    const list = this.getImportHistory();
-    const updated = [entry, ...list.slice(0, 49)];
-    this.safeSetItem(KEYS.IMPORT_HISTORY, JSON.stringify(updated));
-    this.notify();
+  saveImportHistory(_entry: MasterImportHistory) {
+    // Historial de Maestro deshabilitado por requerimiento operativo
   },
 
   // ---------------- BACKUP & RESTORE ----------------

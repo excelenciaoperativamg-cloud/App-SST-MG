@@ -2,18 +2,9 @@ import React, { useState, useMemo } from 'react';
 import {
   Users,
   Search,
-  Filter,
   FileSpreadsheet,
   Download,
-  Plus,
   Building2,
-  Calendar,
-  Briefcase,
-  History,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  FileCheck,
 } from 'lucide-react';
 import { useSST } from '../../context/SSTContext';
 import { useAuth } from '../../context/AuthContext';
@@ -23,7 +14,7 @@ import { PersonnelWorker } from '../../types';
 import { ExcelMasterUpdateModal } from './ExcelMasterUpdateModal';
 
 export const PersonnelMasterView: React.FC = () => {
-  const { workers, saveWorker, importHistory } = useSST();
+  const { workers } = useSST();
   const { canEdit, user, activeSiteId, switchSite } = useAuth();
 
   const isAdmin = user?.role === 'admin';
@@ -33,7 +24,6 @@ export const PersonnelMasterView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedEstado, setSelectedEstado] = useState<'TODOS' | 'ACTIVO' | 'INACTIVO'>('ACTIVO');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<PersonnelWorker | null>(null);
 
   const siteScopedWorkers = useMemo(() => {
@@ -52,8 +42,8 @@ export const PersonnelMasterView: React.FC = () => {
         const matches =
           String(w.cedula).includes(query) ||
           w.nombre.toLowerCase().includes(query) ||
-          w.puesto.toLowerCase().includes(query) ||
-          (w.eps && w.eps.toLowerCase().includes(query));
+          (w.cargo || w.puesto || '').toLowerCase().includes(query) ||
+          (w.sedeId && w.sedeId.toLowerCase().includes(query));
         if (!matches) return false;
       }
       return true;
@@ -89,14 +79,6 @@ export const PersonnelMasterView: React.FC = () => {
           >
             <Download className="h-4 w-4 text-emerald-600" />
             <span>Exportar Excel</span>
-          </button>
-
-          <button
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs transition-colors"
-          >
-            <History className="h-4 w-4 text-[#0A2958]" />
-            <span>Historial ({importHistory.length})</span>
           </button>
 
           {canEdit() && (
@@ -139,7 +121,7 @@ export const PersonnelMasterView: React.FC = () => {
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar por cédula, nombre completo, puesto o EPS..."
+              placeholder="Buscar por cédula, nombre, sede o cargo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
@@ -191,20 +173,19 @@ export const PersonnelMasterView: React.FC = () => {
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10">
               <tr>
                 <th scope="col" className="px-4 py-3">Cédula</th>
-                <th scope="col" className="px-4 py-3">Nombre del Trabajador</th>
-                <th scope="col" className="px-4 py-3">Puesto / Cargo</th>
+                <th scope="col" className="px-4 py-3">Nombre</th>
+                <th scope="col" className="px-4 py-3 whitespace-nowrap">Fecha Nacimiento</th>
+                <th scope="col" className="px-4 py-3 text-center">Edad</th>
+                <th scope="col" className="px-4 py-3 text-center">Género</th>
                 <th scope="col" className="px-4 py-3">Sede</th>
-                <th scope="col" className="px-4 py-3">Edad / Género</th>
-                <th scope="col" className="px-4 py-3">EPS & ARL</th>
-                <th scope="col" className="px-4 py-3">Ingreso</th>
-                <th scope="col" className="px-4 py-3">Estado</th>
-                <th scope="col" className="px-4 py-3 text-right">Acción</th>
+                <th scope="col" className="px-4 py-3 whitespace-nowrap">Fecha Ingreso</th>
+                <th scope="col" className="px-4 py-3">Cargo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredWorkers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     No se encontraron trabajadores que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -212,53 +193,34 @@ export const PersonnelMasterView: React.FC = () => {
                 filteredWorkers.map((worker) => (
                   <tr
                     key={worker.id}
-                    className="hover:bg-slate-50/80 transition-colors"
+                    onClick={() => setSelectedWorker(worker)}
+                    className="hover:bg-slate-50/80 transition-colors cursor-pointer"
                   >
-                    <td className="px-4 py-3 font-mono font-bold text-[#0A2958]">
+                    <td className="px-4 py-3 font-mono font-bold text-[#0A2958] whitespace-nowrap">
                       {worker.cedula}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-bold text-slate-800">{worker.nombre}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-700 font-medium">
-                      {worker.puesto}
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {worker.fechaNacimiento || '—'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center font-medium text-slate-700 whitespace-nowrap">
+                      {worker.edad > 0 ? worker.edad : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center font-semibold text-slate-700 whitespace-nowrap">
+                      {worker.genero || '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className="font-bold text-[#0A2958] bg-slate-100 px-2 py-0.5 rounded">
                         {worker.sedeId}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {worker.edad} años ({worker.genero})
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-[11px] text-slate-700">{worker.eps || 'No registrada'}</div>
-                      <div className="text-[10px] text-slate-600">{worker.arl || 'No registrada'}</div>
-                    </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {worker.fechaIngreso}
+                      {worker.fechaIngreso || '—'}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {worker.estado === 'ACTIVO' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                          <CheckCircle2 className="h-3 w-3" />
-                          ACTIVO
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
-                          <XCircle className="h-3 w-3" />
-                          INACTIVO
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => setSelectedWorker(worker)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-[#0A2958] hover:bg-slate-100 transition-colors"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        <span>Detalles</span>
-                      </button>
+                    <td className="px-4 py-3 text-slate-700 font-medium">
+                      {worker.cargo || worker.puesto}
                     </td>
                   </tr>
                 ))
@@ -288,36 +250,36 @@ export const PersonnelMasterView: React.FC = () => {
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Nombre Completo:</span>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Cédula:</span>
+                  <p className="font-mono font-bold text-[#0A2958]">{selectedWorker.cedula}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Nombre:</span>
                   <p className="font-bold text-slate-800 text-sm">{selectedWorker.nombre}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Estado:</span>
-                  <p className="font-bold text-slate-800">{selectedWorker.estado}</p>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Fecha Nacimiento:</span>
+                  <p className="font-medium text-slate-700">{selectedWorker.fechaNacimiento || '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Puesto / Cargo:</span>
-                  <p className="font-semibold text-slate-700">{selectedWorker.puesto}</p>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Edad:</span>
+                  <p className="font-medium text-slate-700">{selectedWorker.edad > 0 ? selectedWorker.edad : '—'}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Género:</span>
+                  <p className="font-medium text-slate-700">{selectedWorker.genero || '—'}</p>
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase text-slate-400">Sede:</span>
                   <p className="font-semibold text-[#0A2958]">{selectedWorker.sedeId}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Fecha Nacimiento:</span>
-                  <p className="font-medium text-slate-700">{selectedWorker.fechaNacimiento} ({selectedWorker.edad} años)</p>
-                </div>
-                <div>
                   <span className="text-[10px] font-bold uppercase text-slate-400">Fecha Ingreso:</span>
-                  <p className="font-medium text-slate-700">{selectedWorker.fechaIngreso}</p>
+                  <p className="font-medium text-slate-700">{selectedWorker.fechaIngreso || '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">EPS:</span>
-                  <p className="font-medium text-slate-700">{selectedWorker.eps || 'N/A'}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">ARL:</span>
-                  <p className="font-medium text-slate-700">{selectedWorker.arl || 'N/A'}</p>
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Cargo:</span>
+                  <p className="font-semibold text-slate-700">{selectedWorker.cargo || selectedWorker.puesto}</p>
                 </div>
               </div>
 
@@ -333,64 +295,6 @@ export const PersonnelMasterView: React.FC = () => {
             <div className="mt-5 flex justify-end">
               <button
                 onClick={() => setSelectedWorker(null)}
-                className="rounded-lg bg-[#0A2958] px-4 py-2 text-xs font-bold text-white hover:bg-blue-900"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* History of Imports Modal */}
-      {isHistoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div>
-                <h3 className="text-base font-bold text-[#0A2958]">Historial de Actualizaciones del Maestro</h3>
-                <p className="text-xs text-slate-500">Registro auditable de importaciones de Excel realizadas</p>
-              </div>
-              <button
-                onClick={() => setIsHistoryModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto space-y-2 text-xs">
-              {importHistory.length === 0 ? (
-                <p className="text-center text-slate-400 py-6">No hay registros de importación masiva aún.</p>
-              ) : (
-                importHistory.map((h) => (
-                  <div key={h.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-center justify-between font-bold text-slate-800 mb-1">
-                      <span>{h.nombreArchivo}</span>
-                      <span className="text-[11px] text-slate-500">
-                        {new Date(h.fecha).toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-                      <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">
-                        {h.tipoCarga}
-                      </span>
-                      <span>Total: {h.totalLeidos}</span>
-                      <span className="text-emerald-700 font-semibold">Nuevos: {h.nuevos}</span>
-                      <span className="text-blue-700 font-semibold">Actualizados: {h.actualizados}</span>
-                      <span className="text-amber-700 font-semibold">Inactivos: {h.marcadosInactivos}</span>
-                    </div>
-                    <p className="text-[10px] text-slate-600 mt-1">
-                      Ejecutado por: {h.usuarioNombre} ({h.usuarioEmail})
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={() => setIsHistoryModalOpen(false)}
                 className="rounded-lg bg-[#0A2958] px-4 py-2 text-xs font-bold text-white hover:bg-blue-900"
               >
                 Cerrar

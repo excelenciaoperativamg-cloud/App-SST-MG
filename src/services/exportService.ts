@@ -59,8 +59,7 @@ export const exportService = {
    * Export Master Personnel to Excel (.xlsx)
    */
   exportPersonnelToExcel(workers: PersonnelWorker[], fileName = 'Maestro_Personal_MG_SST') {
-    const data = workers.map((w, i) => ({
-      'Item': i + 1,
+    const data = workers.map((w) => ({
       'Cédula': w.cedula,
       'Nombre': w.nombre,
       'Fecha Nacimiento': w.fechaNacimiento,
@@ -68,12 +67,7 @@ export const exportService = {
       'Género': w.genero,
       'Sede': w.sedeId,
       'Fecha Ingreso': w.fechaIngreso,
-      'Puesto / Cargo': w.puesto,
-      'EPS': w.eps || 'N/A',
-      'ARL': w.arl || 'N/A',
-      'Estado': w.estado,
-      'Fecha Retiro': w.fechaRetiro || '',
-      'Motivo Retiro': w.motivoRetiro || '',
+      'Cargo': w.cargo || w.puesto,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -81,20 +75,14 @@ export const exportService = {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Maestro_Personal');
 
     worksheet['!cols'] = [
-      { wch: 6 },
-      { wch: 14 },
+      { wch: 15 },
       { wch: 30 },
-      { wch: 16 },
+      { wch: 18 },
       { wch: 8 },
       { wch: 8 },
-      { wch: 10 },
-      { wch: 14 },
-      { wch: 25 },
-      { wch: 18 },
-      { wch: 18 },
       { wch: 12 },
-      { wch: 14 },
-      { wch: 30 },
+      { wch: 16 },
+      { wch: 26 },
     ];
 
     XLSX.writeFile(workbook, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);

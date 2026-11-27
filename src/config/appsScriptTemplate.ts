@@ -281,14 +281,29 @@ function readAppSstMgData_() {
 
     const ss = SpreadsheetApp.openById(appSstId);
 
-    // 1. Leer hoja Maestro
-    const maestroSheet = findSheet_(ss, ['Maestro', 'Personal', 'Trabajadores']);
+    // 1. Leer hoja Maestro (en App_SST MG o como respaldo en Entrega Epp´s MG)
+    let maestroSS = ss;
+    let maestroSheet = findSheet_(ss, ['Maestro', 'Personal', 'Trabajadores']);
+    if (!maestroSheet) {
+      const targetSs = getTargetSpreadsheet_();
+      const fallbackSheet = findSheet_(targetSs, ['Maestro', 'Personal', 'Trabajadores']);
+      if (fallbackSheet) {
+        maestroSS = targetSs;
+        maestroSheet = fallbackSheet;
+      }
+    }
+
     if (maestroSheet && maestroSheet.getLastRow() >= 2) {
+      const mTz = maestroSS.getSpreadsheetTimeZone();
       const mData = maestroSheet.getDataRange().getValues();
       const mHeaders = mData[0].map(normalizeSheetName_);
       const idxCed = mHeaders.findIndex(function (h) { return h.indexOf('cedula') !== -1 || h.indexOf('documento') !== -1 || h.indexOf('identificacion') !== -1; });
       const idxNom = mHeaders.findIndex(function (h) { return h.indexOf('nombre') !== -1; });
+      const idxNac = mHeaders.findIndex(function (h) { return h.indexOf('nacimiento') !== -1 || h.indexOf('f. nac') !== -1 || h.indexOf('f nac') !== -1; });
+      const idxEdad = mHeaders.findIndex(function (h) { return h === 'edad' || h.indexOf('edad') !== -1; });
+      const idxGen = mHeaders.findIndex(function (h) { return h === 'genero' || h === 'sexo' || h.indexOf('genero') !== -1 || h.indexOf('sexo') !== -1; });
       const idxSede = mHeaders.findIndex(function (h) { return h.indexOf('sede') !== -1; });
+      const idxIng = mHeaders.findIndex(function (h) { return h.indexOf('ingreso') !== -1; });
       let idxCargo = mHeaders.findIndex(function (h) { return h === 'cargo' || h.indexOf('cargo') !== -1; });
       let idxPuesto = mHeaders.findIndex(function (h) { return h === 'puesto' || h === 'labor' || h.indexOf('puesto') !== -1 || h.indexOf('labor') !== -1; });
       if (idxCargo === -1) idxCargo = idxPuesto;
@@ -305,6 +320,26 @@ function readAppSstMgData_() {
 
         const cargoVal = idxCargo !== -1 ? String(row[idxCargo] || '').trim() : '';
         const puestoVal = idxPuesto !== -1 ? String(row[idxPuesto] || '').trim() : cargoVal;
+        const fechaNac = idxNac !== -1 ? formatDateISO_(row[idxNac], mTz) : '';
+        const fechaIng = idxIng !== -1 ? formatDateISO_(row[idxIng], mTz) : '';
+
+        let edadVal = idxEdad !== -1 ? parseInt(String(row[idxEdad] || '').replace(/[^0-9]/g, ''), 10) : 0;
+        if ((!edadVal || isNaN(edadVal)) && fechaNac && /^\\d{4}-\\d{2}-\\d{2}$/.test(fechaNac)) {
+          const parts = fechaNac.split('-');
+          const today = new Date();
+          let calc = today.getFullYear() - Number(parts[0]);
+          if (today.getMonth() + 1 < Number(parts[1]) || (today.getMonth() + 1 === Number(parts[1]) && today.getDate() < Number(parts[2]))) {
+            calc--;
+          }
+          if (calc > 0 && calc < 110) edadVal = calc;
+        }
+        if (isNaN(edadVal)) edadVal = 0;
+
+        const rawGen = idxGen !== -1 ? normalizeSheetName_(row[idxGen]).toUpperCase() : '';
+        let generoVal = 'M';
+        if (rawGen.indexOf('F') === 0 || rawGen === 'MUJER') generoVal = 'F';
+        else if (rawGen.indexOf('M') === 0 || rawGen === 'HOMBRE') generoVal = 'M';
+        else if (rawGen) generoVal = 'OTRO';
 
         output.maestro.push({
           id: cedula,
@@ -316,10 +351,10 @@ function readAppSstMgData_() {
           area: idxArea !== -1 ? String(row[idxArea] || '').trim() : '',
           supervisor: idxSup !== -1 ? String(row[idxSup] || '').trim() : '',
           estado: idxEst !== -1 && String(row[idxEst]).toUpperCase().indexOf('INACTIVO') !== -1 ? 'INACTIVO' : 'ACTIVO',
-          fechaNacimiento: '',
-          edad: 0,
-          genero: 'M',
-          fechaIngreso: '',
+          fechaNacimiento: fechaNac,
+          edad: edadVal,
+          genero: generoVal,
+          fechaIngreso: fechaIng,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });

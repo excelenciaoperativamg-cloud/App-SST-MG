@@ -11,26 +11,22 @@ export const personnelService = {
       {
         'Cédula': '1017000111',
         'Nombre': 'Ejemplo Juan Pérez Restrepo',
-        'Fecha de nacimiento': '1990-05-15',
+        'Fecha Nacimiento': '1990-05-15',
         'Edad': 36,
         'Género': 'M',
         'Sede': 'MG-MG',
-        'Fecha de ingreso': '2022-01-15',
-        'Puesto': 'Técnico Operativo',
-        'EPS': 'SURA EPS',
-        'ARL': 'ARL SURA',
+        'Fecha Ingreso': '2022-01-15',
+        'Cargo': 'Técnico Operativo',
       },
       {
         'Cédula': '1020000222',
         'Nombre': 'Ejemplo María Gómez Cano',
-        'Fecha de nacimiento': '1995-10-22',
+        'Fecha Nacimiento': '1995-10-22',
         'Edad': 31,
         'Género': 'F',
         'Sede': 'MG-HA',
-        'Fecha de ingreso': '2023-04-01',
-        'Puesto': 'Supervisora de Planta',
-        'EPS': 'Sanitas EPS',
-        'ARL': 'ARL SURA',
+        'Fecha Ingreso': '2023-04-01',
+        'Cargo': 'Supervisora de Planta',
       },
     ];
 
@@ -39,7 +35,7 @@ export const personnelService = {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Maestro');
 
     // Auto-fit column widths
-    const maxCols = [15, 30, 20, 8, 8, 12, 18, 25, 18, 18];
+    const maxCols = [15, 30, 18, 8, 8, 12, 16, 26];
     worksheet['!cols'] = maxCols.map((w) => ({ wch: w }));
 
     XLSX.writeFile(workbook, 'Plantilla_Maestro_Personal_MG_SST.xlsx');
@@ -95,27 +91,48 @@ export const personnelService = {
             const rowNumber = index + 2; // Row 1 is header
 
             // Standardize field names by normalizing keys
+            const normalizeKey = (k: string) =>
+              k
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+
             const getVal = (possibleKeys: string[]) => {
               for (const k of possibleKeys) {
+                const target = normalizeKey(k);
                 const foundKey = Object.keys(row).find(
-                  (rk) => rk.toLowerCase().trim() === k.toLowerCase().trim()
+                  (rk) => normalizeKey(rk) === target
                 );
-                if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
-                  return String(row[foundKey]).trim();
+                if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && row[foundKey] !== '') {
+                  const raw = row[foundKey];
+                  if (raw instanceof Date && !isNaN(raw.getTime())) {
+                    return raw.toISOString().split('T')[0];
+                  }
+                  return String(raw).trim();
                 }
               }
               return '';
             };
 
+            const normalizeDateStr = (rawDate: string) => {
+              const s = String(rawDate || '').trim();
+              const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+              if (dmy) {
+                return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+              }
+              return s;
+            };
+
             const cedula = getVal(['Cédula', 'Cedula', 'Documento', 'ID']);
             const nombre = getVal(['Nombre', 'Nombres y Apellidos', 'Trabajador']);
-            const fechaNac = getVal(['Fecha de nacimiento', 'Fecha Nacimiento', 'F. Nacimiento', 'Nacimiento']);
+            const fechaNac = normalizeDateStr(getVal(['Fecha Nacimiento', 'Fecha de nacimiento', 'F. Nacimiento', 'Nacimiento']));
             const edadRaw = getVal(['Edad']);
             const generoRaw = getVal(['Género', 'Genero', 'Sexo']).toUpperCase();
             const sede = getVal(['Sede', 'SedeId', 'Centro de Trabajo']);
-            const fechaIngreso = getVal(['Fecha de ingreso', 'Fecha Ingreso', 'F. Ingreso', 'Ingreso']);
-            const puesto = getVal(['Puesto', 'Labor', 'Cargo', 'Ocupación', 'Ocupacion']);
-            const cargo = getVal(['Cargo', 'Puesto', 'Ocupación', 'Ocupacion']);
+            const fechaIngreso = normalizeDateStr(getVal(['Fecha Ingreso', 'Fecha de ingreso', 'F. Ingreso', 'Ingreso']));
+            const cargo = getVal(['Cargo', 'Puesto', 'Labor', 'Ocupación', 'Ocupacion']);
+            const puesto = cargo;
             const eps = getVal(['EPS', 'Entidad de Salud']);
             const arl = getVal(['ARL', 'Aseguradora de Riesgos']);
 
@@ -193,11 +210,23 @@ export const personnelService = {
               if (existing.nombre !== formattedWorker.nombre) {
                 changes.push(`Nombre: "${existing.nombre}" ➔ "${formattedWorker.nombre}"`);
               }
+              if (existing.fechaNacimiento !== formattedWorker.fechaNacimiento && fechaNac) {
+                changes.push(`Fecha Nac.: "${existing.fechaNacimiento || '—'}" ➔ "${formattedWorker.fechaNacimiento}"`);
+              }
+              if (existing.edad !== formattedWorker.edad && formattedWorker.edad > 0) {
+                changes.push(`Edad: "${existing.edad || '—'}" ➔ "${formattedWorker.edad}"`);
+              }
+              if (existing.genero !== formattedWorker.genero && generoRaw) {
+                changes.push(`Género: "${existing.genero || '—'}" ➔ "${formattedWorker.genero}"`);
+              }
               if (existing.sedeId !== formattedWorker.sedeId) {
                 changes.push(`Sede: "${existing.sedeId}" ➔ "${formattedWorker.sedeId}"`);
               }
+              if (existing.fechaIngreso !== formattedWorker.fechaIngreso && fechaIngreso) {
+                changes.push(`Fecha Ing.: "${existing.fechaIngreso || '—'}" ➔ "${formattedWorker.fechaIngreso}"`);
+              }
               if (existing.puesto !== formattedWorker.puesto) {
-                changes.push(`Puesto: "${existing.puesto}" ➔ "${formattedWorker.puesto}"`);
+                changes.push(`Cargo: "${existing.puesto}" ➔ "${formattedWorker.puesto}"`);
               }
               if (existing.eps && formattedWorker.eps && existing.eps !== formattedWorker.eps) {
                 changes.push(`EPS: "${existing.eps}" ➔ "${formattedWorker.eps}"`);
