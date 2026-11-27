@@ -5,9 +5,10 @@ import {
   GoogleAuthProvider,
   User as FirebaseUser,
   onAuthStateChanged,
+  Auth,
 } from 'firebase/auth';
 import * as XLSX from 'xlsx';
-import firebaseConfig from '../../firebase-applet-config.json';
+import defaultFirebaseConfig from '../../firebase-applet-config.json';
 import { AppUser, INITIAL_APP_USERS } from '../config/users';
 import { Role, SSTRecord, SSTRecordStatus } from '../types';
 import { EntregaEPPMGRecord } from '../types/epp';
@@ -21,16 +22,40 @@ const EMERGENCY_SPREADSHEET_ID_KEY = 'mg_sst_emergency_spreadsheet_id';
 const EMERGENCY_SPREADSHEET_NAME_KEY = 'mg_sst_emergency_spreadsheet_name';
 const EMERGENCY_LAST_SYNC_KEY = 'mg_sst_emergency_last_sync';
 
+function cleanEnvValue(val: unknown): string {
+  return String(val || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
 function extractSpreadsheetId(input: string): string {
-  const clean = String(input || '').trim();
+  const clean = cleanEnvValue(input);
   if (!clean) return '';
   const match = clean.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   return match ? match[1] : clean;
 }
 
-// Initialize Firebase App safely (singleton)
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
+const resolvedFirebaseConfig = {
+  apiKey: cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_API_KEY) || defaultFirebaseConfig.apiKey,
+  authDomain: cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN) || defaultFirebaseConfig.authDomain,
+  projectId: cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_PROJECT_ID) || defaultFirebaseConfig.projectId,
+  storageBucket: cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET) || defaultFirebaseConfig.storageBucket,
+  messagingSenderId:
+    cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
+    defaultFirebaseConfig.messagingSenderId,
+  appId: cleanEnvValue((import.meta as any).env?.VITE_FIREBASE_APP_ID) || defaultFirebaseConfig.appId,
+};
+
+let auth: Auth | null = null;
+try {
+  if (resolvedFirebaseConfig.apiKey && resolvedFirebaseConfig.projectId) {
+    const app = getApps().length > 0 ? getApp() : initializeApp(resolvedFirebaseConfig);
+    auth = getAuth(app);
+  }
+} catch (err) {
+  console.warn('Firebase Auth initialization skipped:', err);
+}
 
 // Provider with Drive and Sheets scopes
 const provider = new GoogleAuthProvider();
@@ -93,11 +118,11 @@ export const googleDriveService = {
    * Apps Script Web App URL management (Automatic unified connection across ALL forms)
    */
   getAppsScriptUrl(): string {
-    const stored = localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) || '';
-    const envUrl = (import.meta as any).env?.VITE_APPS_SCRIPT_URL || '';
-    const emergencyStored = localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY) || '';
-    const emergencyEnv = (import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL || '';
-    return (stored || envUrl || emergencyStored || emergencyEnv || '').trim();
+    const stored = cleanEnvValue(localStorage.getItem(APPS_SCRIPT_STORAGE_KEY));
+    const envUrl = cleanEnvValue((import.meta as any).env?.VITE_APPS_SCRIPT_URL);
+    const emergencyStored = cleanEnvValue(localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY));
+    const emergencyEnv = cleanEnvValue((import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL);
+    return stored || envUrl || emergencyStored || emergencyEnv || '';
   },
 
   setAppsScriptUrl(url: string): void {
@@ -135,6 +160,7 @@ export const googleDriveService = {
     onSuccess?: (user: FirebaseUser, token: string) => void,
     onFailure?: () => void
   ) {
+    if (!auth) return () => {};
     return onAuthStateChanged(auth, async (user) => {
       if (user && cachedAccessToken) {
         cachedGoogleUser = user;
@@ -151,6 +177,9 @@ export const googleDriveService = {
    * Interactive Sign In with Google popup to obtain OAuth token
    */
   async signInWithGoogle(): Promise<{ user: FirebaseUser; accessToken: string }> {
+    if (!auth) {
+      throw new Error('Firebase Auth no está configurado en este entorno.');
+    }
     try {
       isSigningIn = true;
       const result = await signInWithPopup(auth, provider);
@@ -209,7 +238,9 @@ export const googleDriveService = {
    * Sign out from Google Auth
    */
   async signOut(): Promise<void> {
-    await auth.signOut();
+    if (auth) {
+      await auth.signOut();
+    }
     cachedAccessToken = null;
     cachedGoogleUser = null;
   },
@@ -1073,9 +1104,9 @@ export const googleDriveService = {
   // ============================================================================
 
   getEmergencyAppsScriptUrl(): string {
-    const stored = localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY) || '';
-    const envUrl = (import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL || '';
-    return (stored || envUrl || '').trim();
+    const stored = cleanEnvValue(localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY));
+    const envUrl = cleanEnvValue((import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL);
+    return stored || envUrl || '';
   },
 
   setEmergencyAppsScriptUrl(url: string): void {
@@ -1093,8 +1124,8 @@ export const googleDriveService = {
   },
 
   getEmergencySpreadsheetId(): string {
-    const stored = localStorage.getItem(EMERGENCY_SPREADSHEET_ID_KEY) || '';
-    const envId = (import.meta as any).env?.VITE_EMERGENCY_SPREADSHEET_ID || '';
+    const stored = cleanEnvValue(localStorage.getItem(EMERGENCY_SPREADSHEET_ID_KEY));
+    const envId = cleanEnvValue((import.meta as any).env?.VITE_EMERGENCY_SPREADSHEET_ID);
     return extractSpreadsheetId(stored || envId || '');
   },
 
