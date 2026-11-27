@@ -1186,12 +1186,16 @@ export const googleDriveService = {
           throw new Error(data.message || 'No se pudo leer el archivo Inspección Emergencias.');
         }
 
-        const sheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
-        if (sheets.length > 0 && typeof sheets[0] === 'string') {
+        const rawSheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
+        if (rawSheets.length > 0 && typeof rawSheets[0] === 'string') {
           throw new Error(
             'El Apps Script conectado devolvió solo nombres de hojas. Actualiza el script con la versión más reciente.'
           );
         }
+
+        const sheets = rawSheets.filter(
+          (s) => s && !storageService.isExcludedEmergencySheet(s.sheetName)
+        );
 
         storageService.setEmergencySheets(sheets);
         if (data.spreadsheetId) {
@@ -1236,7 +1240,9 @@ export const googleDriveService = {
         );
         if (!metaRes.ok) throw new Error(`HTTP ${metaRes.status}`);
         const meta = await metaRes.json();
-        const sheetTitles: string[] = (meta.sheets || []).map((s: any) => s.properties.title);
+        const sheetTitles: string[] = (meta.sheets || [])
+          .map((s: any) => s.properties.title)
+          .filter((title: string) => !storageService.isExcludedEmergencySheet(title));
         const sheets: EmergencySheetData[] = [];
 
         for (const title of sheetTitles) {

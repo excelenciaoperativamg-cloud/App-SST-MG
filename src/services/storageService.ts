@@ -1469,11 +1469,33 @@ export const storageService = {
   },
 
   // ---------------- INSPECCIÓN EMERGENCIAS (DRIVE SHEETS DINÁMICOS) ----------------
+  isExcludedEmergencySheet(sheetName: string): boolean {
+    const norm = String(sheetName || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    return [
+      'tipo extintor',
+      'tipos extintor',
+      'datos extintores',
+      'datos extintor',
+      'datos kit',
+      'estado ie',
+      'estados ie',
+      'responsables sst',
+      'responsable sst',
+    ].includes(norm);
+  },
+
   getEmergencySheets(): EmergencySheetData[] {
     try {
       const stored = localStorage.getItem(KEYS.EMERGENCY_SHEETS);
       const parsed = stored ? JSON.parse(stored) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((s: EmergencySheetData) => s && !this.isExcludedEmergencySheet(s.sheetName))
+        : [];
     } catch {
       return [];
     }
@@ -1481,7 +1503,8 @@ export const storageService = {
 
   setEmergencySheets(sheets: EmergencySheetData[]) {
     if (!Array.isArray(sheets)) return;
-    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(sheets));
+    const filtered = sheets.filter((s) => s && !this.isExcludedEmergencySheet(s.sheetName));
+    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(filtered));
     this.notify();
   },
 

@@ -370,6 +370,22 @@ function getEmergencySpreadsheet_(customId) {
   throw new Error('No se encontró el archivo "Inspección Emergencias" en la carpeta App_SST MG.V2. Indica el ID del archivo en la configuración.');
 }
 
+function isExcludedEmergencySheet_(name) {
+  const norm = normalizeSheetName_(name).replace(/[^a-z0-9]+/g, ' ').trim();
+  const excluded = [
+    'tipo extintor',
+    'tipos extintor',
+    'datos extintores',
+    'datos extintor',
+    'datos kit',
+    'estado ie',
+    'estados ie',
+    'responsables sst',
+    'responsable sst',
+  ];
+  return excluded.indexOf(norm) !== -1;
+}
+
 function readEmergencyWorkbook_(ss) {
   const tz = ss.getSpreadsheetTimeZone();
   const sheets = ss.getSheets();
@@ -377,6 +393,7 @@ function readEmergencyWorkbook_(ss) {
 
   for (let s = 0; s < sheets.length; s++) {
     const sheet = sheets[s];
+    if (isExcludedEmergencySheet_(sheet.getName())) continue;
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
     if (lastRow < 1 || lastCol < 1) continue;
@@ -1086,6 +1103,22 @@ function saveEmergencyImageToDrive_(dataUrl, fileName) {
   }
 }
 
+function isExcludedEmergencySheetName_(name) {
+  const norm = normalizeName_(name).replace(/[^a-z0-9]+/g, ' ').trim();
+  const excluded = [
+    'tipo extintor',
+    'tipos extintor',
+    'datos extintores',
+    'datos extintor',
+    'datos kit',
+    'estado ie',
+    'estados ie',
+    'responsables sst',
+    'responsable sst',
+  ];
+  return excluded.indexOf(norm) !== -1;
+}
+
 function readAllEmergencySheets_(ss) {
   const tz = ss.getSpreadsheetTimeZone();
   const sheets = ss.getSheets();
@@ -1093,6 +1126,7 @@ function readAllEmergencySheets_(ss) {
 
   for (let s = 0; s < sheets.length; s++) {
     const sheet = sheets[s];
+    if (isExcludedEmergencySheetName_(sheet.getName())) continue;
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
     if (lastRow < 1 || lastCol < 1) continue;

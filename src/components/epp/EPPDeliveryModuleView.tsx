@@ -238,8 +238,15 @@ export const EPPDeliveryModuleView: React.FC = () => {
     try {
       const result = await googleDriveService.fetchDeliveriesFromDrive();
       if (result.needsConfig) {
-        setIsScriptModalOpen(true);
-        showNotification('error', result.message);
+        if (user?.role === 'admin') {
+          setIsScriptModalOpen(true);
+        }
+        showNotification(
+          'error',
+          user?.role === 'admin'
+            ? result.message
+            : 'La conexión con Google Drive debe ser configurada por un Administrador.'
+        );
       } else if (result.success) {
         storageService.syncDeliveriesFromRemote(result.records);
         loadDeliveries();
@@ -308,18 +315,20 @@ export const EPPDeliveryModuleView: React.FC = () => {
             )}
           </button>
 
-          <button
-            onClick={() => setIsScriptModalOpen(true)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shadow-xs cursor-pointer ${
-              isAppsScriptConnected
-                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
-                : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
-            }`}
-            title="Ver Script de Google Apps Script y configurar conexión automática con Entrega Epp´s MG"
-          >
-            <Code2 className={`w-4 h-4 ${isAppsScriptConnected ? 'text-emerald-600' : 'text-amber-600'}`} />
-            <span>{isAppsScriptConnected ? 'Drive Conectado' : 'Script Conexión Drive'}</span>
-          </button>
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => setIsScriptModalOpen(true)}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shadow-xs cursor-pointer ${
+                isAppsScriptConnected
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+              }`}
+              title="Ver Script de Google Apps Script y configurar conexión automática con Entrega Epp´s MG"
+            >
+              <Code2 className={`w-4 h-4 ${isAppsScriptConnected ? 'text-emerald-600' : 'text-amber-600'}`} />
+              <span>{isAppsScriptConnected ? 'Drive Conectado' : 'Script Conexión Drive'}</span>
+            </button>
+          )}
 
           <button
             onClick={handleExportExcel}
@@ -822,16 +831,18 @@ export const EPPDeliveryModuleView: React.FC = () => {
         editingDelivery={editingDelivery}
       />
 
-      {/* Apps Script Connection Modal */}
-      <AppsScriptConnectionModal
-        isOpen={isScriptModalOpen}
-        onClose={() => setIsScriptModalOpen(false)}
-        onConnected={(msg) => {
-          setIsAppsScriptConnected(true);
-          loadDeliveries();
-          showNotification('success', msg);
-        }}
-      />
+      {/* Apps Script Connection Modal (Admin only) */}
+      {user?.role === 'admin' && (
+        <AppsScriptConnectionModal
+          isOpen={isScriptModalOpen}
+          onClose={() => setIsScriptModalOpen(false)}
+          onConnected={(msg) => {
+            setIsAppsScriptConnected(true);
+            loadDeliveries();
+            showNotification('success', msg);
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
