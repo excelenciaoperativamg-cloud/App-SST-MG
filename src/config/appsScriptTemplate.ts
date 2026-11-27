@@ -323,11 +323,131 @@ function readAppSstMgData_() {
 }
 
 /**
+ * Busca el libro "Inspección Emergencias" por ID o en la carpeta App_SST MG.V2
+ */
+function getEmergencySpreadsheet_(customId) {
+  if (customId) {
+    return SpreadsheetApp.openById(String(customId).trim());
+  }
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active && normalizeSheetName_(active.getName()).indexOf('emergencia') !== -1) {
+    return active;
+  }
+  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
+      const normName = normalizeSheetName_(f.getName());
+      if (normName.indexOf('emergencia') !== -1) {
+        return SpreadsheetApp.openById(f.getId());
+      }
+    }
+  }
+  throw new Error('No se encontró el archivo "Inspección Emergencias" en la carpeta App_SST MG.V2. Indica el ID del archivo en la configuración.');
+}
+
+function readEmergencyWorkbook_(ss) {
+  const tz = ss.getSpreadsheetTimeZone();
+  const sheets = ss.getSheets();
+  const result = [];
+
+  for (let s = 0; s < sheets.length; s++) {
+    const sheet = sheets[s];
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 1 || lastCol < 1) continue;
+
+    const rawHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const headers = [];
+    for (let c = 0; c < rawHeaders.length; c++) {
+      const h = String(rawHeaders[c] || '').trim();
+      if (h) headers.push({ name: h, colIdx: c });
+    }
+    if (headers.length === 0) continue;
+
+    const headerNames = headers.map(function (h) { return h.name; });
+    const rows = [];
+    const suggestionsMap = {};
+    headerNames.forEach(function (hn) { suggestionsMap[hn] = {}; });
+
+    if (lastRow >= 2) {
+      const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      for (let r = 0; r < data.length; r++) {
+        const rowArr = data[r];
+        let hasAny = false;
+        const valuesObj = {};
+
+        for (let hIdx = 0; hIdx < headers.length; hIdx++) {
+          const hInfo = headers[hIdx];
+          const cellVal = rowArr[hInfo.colIdx];
+          let strVal = '';
+          if (cellVal instanceof Date) {
+            strVal = formatDateISO_(cellVal, tz);
+          } else if (cellVal !== null && cellVal !== undefined) {
+            strVal = String(cellVal).trim();
+            // Convert DD/MM/YYYY to YYYY-MM-DD when header looks like date
+            if (normalizeSheetName_(hInfo.name).indexOf('fecha') !== -1) {
+              strVal = formatDateISO_(strVal, tz);
+            }
+          }
+          if (strVal !== '') hasAny = true;
+          valuesObj[hInfo.name] = strVal;
+
+          if (strVal && !strVal.startsWith('data:image') && strVal.length <= 60) {
+            suggestionsMap[hInfo.name][strVal] = true;
+          }
+        }
+
+        if (!hasAny) continue;
+        const firstColVal = valuesObj[headerNames[0]] || ('ROW-' + (r + 2));
+        rows.push({
+          rowNumber: r + 2,
+          rowId: String(firstColVal),
+          values: valuesObj,
+        });
+      }
+    }
+
+    const suggestions = {};
+    headerNames.forEach(function (hn) {
+      const keys = Object.keys(suggestionsMap[hn]);
+      if (keys.length > 0 && keys.length <= 40) {
+        suggestions[hn] = keys.sort();
+      }
+    });
+
+    result.push({
+      sheetName: sheet.getName(),
+      headers: headerNames,
+      rows: rows.reverse(),
+      suggestions: suggestions,
+    });
+  }
+
+  return result;
+}
+
+/**
  * Endpoint GET - Sincronización automática de catálogos y registros
  */
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getAll';
+
+    if (action === 'getEmergencySheets') {
+      const customId = (e && e.parameter && e.parameter.spreadsheetId) ? e.parameter.spreadsheetId : '';
+      const emSs = getEmergencySpreadsheet_(customId);
+      const emSheets = readEmergencyWorkbook_(emSs);
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        spreadsheetId: emSs.getId(),
+        spreadsheetName: emSs.getName(),
+        sheets: emSheets,
+        timestamp: new Date().toISOString(),
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const ss = getTargetSpreadsheet_();
 
     if (action === 'ping') {
@@ -377,6 +497,104 @@ function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) ? e.postData.contents : '{}');
     const action = body.action || 'appendEntregaEPP';
+
+    if (action === 'appendEmergencyRow' || action === 'deleteEmergencyRow') {
+      const emSs = getEmergencySpreadsheet_(body.spreadsheetId || '');
+      const targetSheet = findSheet_(emSs, [body.sheetName]);
+      if (!targetSheet) {
+        throw new Error('No se encontró la hoja "' + (body.sheetName || '') + '" en Inspección Emergencias.');
+      }
+
+      if (action === 'deleteEmergencyRow') {
+        const targetRowId = String(body.rowId || '').trim();
+        let deletedRow = -1;
+        const lastRowEm = targetSheet.getLastRow();
+        if (body.rowNumber && Number(body.rowNumber) >= 2 && Number(body.rowNumber) <= lastRowEm) {
+          const cellVal = String(targetSheet.getRange(Number(body.rowNumber), 1).getValue() || '').trim();
+          if (!targetRowId || cellVal === targetRowId) {
+            deletedRow = Number(body.rowNumber);
+          }
+        }
+        if (deletedRow === -1 && targetRowId && lastRowEm >= 2) {
+          const ids = targetSheet.getRange(2, 1, lastRowEm - 1, 1).getValues();
+          for (let i = 0; i < ids.length; i++) {
+            if (String(ids[i][0] || '').trim() === targetRowId) {
+              deletedRow = i + 2;
+              break;
+            }
+          }
+        }
+        if (deletedRow !== -1) {
+          targetSheet.deleteRow(deletedRow);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          deleted: deletedRow !== -1,
+          row: deletedRow,
+          sheetName: targetSheet.getName(),
+          message: deletedRow !== -1
+            ? 'Registro eliminado de la hoja "' + targetSheet.getName() + '".'
+            : 'No se encontró el registro en "' + targetSheet.getName() + '".',
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // appendEmergencyRow
+      const lastColEm = Math.max(targetSheet.getLastColumn(), 1);
+      const rawHeaders = targetSheet.getRange(1, 1, 1, lastColEm).getValues()[0];
+      const valuesObj = body.values || {};
+      const stampEm = Utilities.formatDate(new Date(), emSs.getSpreadsheetTimeZone(), 'dd-MM-yyyy-HHmmss');
+      const rowArray = [];
+
+      for (let c = 0; c < rawHeaders.length; c++) {
+        const header = String(rawHeaders[c] || '').trim();
+        if (!header) {
+          rowArray.push('');
+          continue;
+        }
+        let val = valuesObj[header] !== undefined ? valuesObj[header] : '';
+        const normH = normalizeSheetName_(header);
+
+        if (typeof val === 'string' && val.startsWith('data:image')) {
+          const safeSheet = normalizeSheetName_(targetSheet.getName()).replace(/[^a-z0-9]/g, '_');
+          const safeCol = normH.replace(/[^a-z0-9]/g, '_');
+          val = saveBase64ImageToDrive_(val, stampEm + '_' + safeSheet + '_' + safeCol + '.jpg');
+        } else if (normH.indexOf('fecha') !== -1 && typeof val === 'string') {
+          val = formatDateSheets_(val);
+        }
+        rowArray.push(val);
+      }
+
+      let updateRow = -1;
+      const lastRowEm = targetSheet.getLastRow();
+      const rowIdVal = String(body.rowId || (rawHeaders[0] ? valuesObj[String(rawHeaders[0]).trim()] : '') || '').trim();
+      if (body.rowNumber && Number(body.rowNumber) >= 2 && Number(body.rowNumber) <= lastRowEm) {
+        updateRow = Number(body.rowNumber);
+      } else if (rowIdVal && lastRowEm >= 2) {
+        const existingIds = targetSheet.getRange(2, 1, lastRowEm - 1, 1).getValues();
+        for (let i = 0; i < existingIds.length; i++) {
+          if (String(existingIds[i][0] || '').trim() === rowIdVal) {
+            updateRow = i + 2;
+            break;
+          }
+        }
+      }
+
+      if (updateRow !== -1) {
+        targetSheet.getRange(updateRow, 1, 1, rowArray.length).setValues([rowArray]);
+      } else {
+        targetSheet.appendRow(rowArray);
+        updateRow = targetSheet.getLastRow();
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        row: updateRow,
+        rowId: rowIdVal,
+        sheetName: targetSheet.getName(),
+        message: 'Registro guardado en la hoja "' + targetSheet.getName() + '" (Inspección Emergencias).',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const ss = getTargetSpreadsheet_();
     const sheet = findSheet_(ss, ["Entrega Epp´s", "Entrega Epp's", "Entrega Epps", "Entrega Epp´s MG"]);
     if (!sheet) {
@@ -493,6 +711,334 @@ function doPost(e) {
       row: targetRow,
       sheetName: sheet.getName(),
       message: 'Registro ' + idEpp + ' guardado automáticamente en "' + sheet.getName() + '".',
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: err.message || String(err),
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+`;
+
+export const EMERGENCY_APPS_SCRIPT_CODE = `// ============================================================================
+// GOOGLE APPS SCRIPT - CONEXIÓN AUTOMÁTICA INSPECCIÓN EMERGENCIAS
+// MG Consultores S.A.S. - Sistema SG-SST
+// Pégalo en Extensiones -> Apps Script dentro del archivo "Inspección Emergencias"
+// ============================================================================
+
+const DRIVE_FOLDER_ID = '1LrtkMgzlxsTz9j_jX-bIATPK5CmF0DV7';
+const EMERGENCY_IMAGES_SUBFOLDER = 'Inspeccion_Emergencias_Images';
+
+function getEmergencyTargetSpreadsheet_(customId) {
+  if (customId) {
+    return SpreadsheetApp.openById(String(customId).trim());
+  }
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) return active;
+  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    if (f.getMimeType() === MimeType.GOOGLE_SHEETS && normalizeName_(f.getName()).indexOf('emergencia') !== -1) {
+      return SpreadsheetApp.openById(f.getId());
+    }
+  }
+  throw new Error('No se pudo abrir el libro de Inspección Emergencias.');
+}
+
+function normalizeName_(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[´'’]/g, '')
+    .normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/\\s+/g, ' ')
+    .trim();
+}
+
+function findSheetByName_(ss, targetName) {
+  const exact = ss.getSheetByName(targetName);
+  if (exact) return exact;
+  const normTarget = normalizeName_(targetName);
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    if (normalizeName_(sheets[i].getName()) === normTarget) {
+      return sheets[i];
+    }
+  }
+  return null;
+}
+
+function formatDateISO_(val, tz) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, tz || Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  const str = String(val).trim();
+  const dmy = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);
+  if (dmy) {
+    return dmy[3] + '-' + dmy[2].padStart(2, '0') + '-' + dmy[1].padStart(2, '0');
+  }
+  return str;
+}
+
+function formatDateSheets_(fechaStr) {
+  if (!fechaStr) return '';
+  const str = String(fechaStr).trim();
+  const ymd = str.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  if (ymd) {
+    return ymd[3] + '/' + ymd[2] + '/' + ymd[1];
+  }
+  return str;
+}
+
+function getOrCreateEmergencyImagesFolder_() {
+  const parent = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const folders = parent.getFoldersByName(EMERGENCY_IMAGES_SUBFOLDER);
+  if (folders.hasNext()) return folders.next();
+  return parent.createFolder(EMERGENCY_IMAGES_SUBFOLDER);
+}
+
+function saveEmergencyImageToDrive_(dataUrl, fileName) {
+  if (!dataUrl || typeof dataUrl !== 'string') return '';
+  if (!dataUrl.startsWith('data:image')) return dataUrl;
+  try {
+    const parts = dataUrl.split(',');
+    const meta = parts[0] || '';
+    const base64Data = parts[1];
+    if (!base64Data) return '';
+    const mimeMatch = meta.match(/data:(image\\/[a-zA-Z0-9.+-]+);base64/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bytes = Utilities.base64Decode(base64Data);
+    const blob = Utilities.newBlob(bytes, mimeType, fileName);
+    const folder = getOrCreateEmergencyImagesFolder_();
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return EMERGENCY_IMAGES_SUBFOLDER + '/' + file.getName();
+  } catch (err) {
+    return 'Imagen adjunta (Drive)';
+  }
+}
+
+function readAllEmergencySheets_(ss) {
+  const tz = ss.getSpreadsheetTimeZone();
+  const sheets = ss.getSheets();
+  const result = [];
+
+  for (let s = 0; s < sheets.length; s++) {
+    const sheet = sheets[s];
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 1 || lastCol < 1) continue;
+
+    const rawHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const headers = [];
+    for (let c = 0; c < rawHeaders.length; c++) {
+      const h = String(rawHeaders[c] || '').trim();
+      if (h) headers.push({ name: h, colIdx: c });
+    }
+    if (headers.length === 0) continue;
+
+    const headerNames = headers.map(function (h) { return h.name; });
+    const rows = [];
+    const suggestionsMap = {};
+    headerNames.forEach(function (hn) { suggestionsMap[hn] = {}; });
+
+    if (lastRow >= 2) {
+      const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      for (let r = 0; r < data.length; r++) {
+        const rowArr = data[r];
+        let hasAny = false;
+        const valuesObj = {};
+
+        for (let hIdx = 0; hIdx < headers.length; hIdx++) {
+          const hInfo = headers[hIdx];
+          const cellVal = rowArr[hInfo.colIdx];
+          let strVal = '';
+          if (cellVal instanceof Date) {
+            strVal = formatDateISO_(cellVal, tz);
+          } else if (cellVal !== null && cellVal !== undefined) {
+            strVal = String(cellVal).trim();
+            if (normalizeName_(hInfo.name).indexOf('fecha') !== -1) {
+              strVal = formatDateISO_(strVal, tz);
+            }
+          }
+          if (strVal !== '') hasAny = true;
+          valuesObj[hInfo.name] = strVal;
+
+          if (strVal && !strVal.startsWith('data:image') && strVal.length <= 60) {
+            suggestionsMap[hInfo.name][strVal] = true;
+          }
+        }
+
+        if (!hasAny) continue;
+        const firstColVal = valuesObj[headerNames[0]] || ('ROW-' + (r + 2));
+        rows.push({
+          rowNumber: r + 2,
+          rowId: String(firstColVal),
+          values: valuesObj,
+        });
+      }
+    }
+
+    const suggestions = {};
+    headerNames.forEach(function (hn) {
+      const keys = Object.keys(suggestionsMap[hn]);
+      if (keys.length > 0 && keys.length <= 40) {
+        suggestions[hn] = keys.sort();
+      }
+    });
+
+    result.push({
+      sheetName: sheet.getName(),
+      headers: headerNames,
+      rows: rows.reverse(),
+      suggestions: suggestions,
+    });
+  }
+
+  return result;
+}
+
+function doGet(e) {
+  try {
+    const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getEmergencySheets';
+    const customId = (e && e.parameter && e.parameter.spreadsheetId) ? e.parameter.spreadsheetId : '';
+    const ss = getEmergencyTargetSpreadsheet_(customId);
+
+    if (action === 'ping') {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        app: 'Inspección Emergencias - SG-SST',
+        spreadsheetId: ss.getId(),
+        spreadsheetName: ss.getName(),
+        sheets: ss.getSheets().map(function (s) { return s.getName(); }),
+        timestamp: new Date().toISOString(),
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const sheets = readAllEmergencySheets_(ss);
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      spreadsheetId: ss.getId(),
+      spreadsheetName: ss.getName(),
+      sheets: sheets,
+      timestamp: new Date().toISOString(),
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: err.message || String(err),
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) ? e.postData.contents : '{}');
+    const action = body.action || 'appendEmergencyRow';
+    const ss = getEmergencyTargetSpreadsheet_(body.spreadsheetId || '');
+    const targetSheet = findSheetByName_(ss, body.sheetName);
+
+    if (!targetSheet) {
+      throw new Error('No se encontró la hoja "' + (body.sheetName || '') + '" en el archivo.');
+    }
+
+    if (action === 'deleteEmergencyRow') {
+      const targetRowId = String(body.rowId || '').trim();
+      let deletedRow = -1;
+      const lastRow = targetSheet.getLastRow();
+
+      if (body.rowNumber && Number(body.rowNumber) >= 2 && Number(body.rowNumber) <= lastRow) {
+        const cellVal = String(targetSheet.getRange(Number(body.rowNumber), 1).getValue() || '').trim();
+        if (!targetRowId || cellVal === targetRowId) {
+          deletedRow = Number(body.rowNumber);
+        }
+      }
+      if (deletedRow === -1 && targetRowId && lastRow >= 2) {
+        const ids = targetSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (let i = 0; i < ids.length; i++) {
+          if (String(ids[i][0] || '').trim() === targetRowId) {
+            deletedRow = i + 2;
+            break;
+          }
+        }
+      }
+      if (deletedRow !== -1) {
+        targetSheet.deleteRow(deletedRow);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        deleted: deletedRow !== -1,
+        row: deletedRow,
+        sheetName: targetSheet.getName(),
+        message: deletedRow !== -1
+          ? 'Registro eliminado de "' + targetSheet.getName() + '".'
+          : 'El registro ya no se encontraba en la hoja.',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const lastCol = Math.max(targetSheet.getLastColumn(), 1);
+    const rawHeaders = targetSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const valuesObj = body.values || {};
+    const stamp = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'dd-MM-yyyy-HHmmss');
+    const rowArray = [];
+
+    for (let c = 0; c < rawHeaders.length; c++) {
+      const header = String(rawHeaders[c] || '').trim();
+      if (!header) {
+        rowArray.push('');
+        continue;
+      }
+      let val = valuesObj[header] !== undefined ? valuesObj[header] : '';
+      const normH = normalizeName_(header);
+
+      if (typeof val === 'string' && val.startsWith('data:image')) {
+        const safeSheet = normalizeName_(targetSheet.getName()).replace(/[^a-z0-9]/g, '_');
+        const safeCol = normH.replace(/[^a-z0-9]/g, '_');
+        val = saveEmergencyImageToDrive_(val, stamp + '_' + safeSheet + '_' + safeCol + '.jpg');
+      } else if (normH.indexOf('fecha') !== -1 && typeof val === 'string') {
+        val = formatDateSheets_(val);
+      }
+      rowArray.push(val);
+    }
+
+    let updateRow = -1;
+    const lastRow = targetSheet.getLastRow();
+    const rowIdVal = String(body.rowId || (rawHeaders[0] ? valuesObj[String(rawHeaders[0]).trim()] : '') || '').trim();
+
+    if (body.rowNumber && Number(body.rowNumber) >= 2 && Number(body.rowNumber) <= lastRow) {
+      updateRow = Number(body.rowNumber);
+    } else if (rowIdVal && lastRow >= 2) {
+      const existingIds = targetSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < existingIds.length; i++) {
+        if (String(existingIds[i][0] || '').trim() === rowIdVal) {
+          updateRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (updateRow !== -1) {
+      targetSheet.getRange(updateRow, 1, 1, rowArray.length).setValues([rowArray]);
+    } else {
+      targetSheet.appendRow(rowArray);
+      updateRow = targetSheet.getLastRow();
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      row: updateRow,
+      rowId: rowIdVal,
+      sheetName: targetSheet.getName(),
+      message: 'Registro guardado en la hoja "' + targetSheet.getName() + '".',
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({

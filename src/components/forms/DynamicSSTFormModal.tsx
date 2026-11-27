@@ -15,6 +15,8 @@ import {
 import { useSST } from '../../context/SSTContext';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_SEDES, SST_MODULES } from '../../config/constants';
+import { CATALOGO_AREAS } from '../../types/epp';
+import { storageService } from '../../services/storageService';
 import { SSTRecord, SSTRecordStatus, EvidenciaArchivo } from '../../types';
 
 interface DynamicSSTFormModalProps {
@@ -82,6 +84,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
       setSubMenuId(s.id);
       setSedeId(activeSiteId !== 'TODAS' ? activeSiteId : 'MG-MG');
       setArea('Operaciones');
+      setSupervisor('');
       setFecha(new Date().toISOString().split('T')[0]);
       setCedulaTrabajador('');
       setNombreTrabajador('');
@@ -132,24 +135,32 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
     }
   };
 
-  // Simulated file upload for photographic evidence
+  // Persist file upload for photographic evidence using Data URL
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newEvidenceList: EvidenciaArchivo[] = [];
     Array.from(files).forEach((f) => {
-      newEvidenceList.push({
-        id: 'ev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-        nombre: f.name,
-        tipo: f.type || 'image/jpeg',
-        url: URL.createObjectURL(f),
-        tamanoKb: Math.round(f.size / 1024),
-        fecha: new Date().toISOString().split('T')[0],
-      });
+      if (f.size > 5 * 1024 * 1024) {
+        setErrorMsg(`El archivo ${f.name} supera el límite de 5 MB.`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+        if (!dataUrl) return;
+        const item: EvidenciaArchivo = {
+          id: 'ev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          nombre: f.name,
+          tipo: f.type || 'image/jpeg',
+          url: dataUrl,
+          tamanoKb: Math.round(f.size / 1024),
+          fecha: new Date().toISOString().split('T')[0],
+        };
+        setEvidencias((prev) => [...prev, item]);
+      };
+      reader.readAsDataURL(f);
     });
-
-    setEvidencias((prev) => [...prev, ...newEvidenceList]);
   };
 
   const removeEvidence = (id: string) => {
@@ -211,7 +222,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">
-                {recordToEdit ? `Editar Registro: ${recordToEdit.numeroRegistro}` : 'Nuevo Registro Operativo SST'}
+                {recordToEdit ? 'Editar Registro Operativo SST' : 'Nuevo Registro Operativo SST'}
               </h2>
               <p className="text-xs text-slate-300">
                 {currentModule.nombre} ➔ {currentSub.nombre}
@@ -255,6 +266,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
               <select
                 id="field-menu-id"
                 value={menuId}
+                disabled={Boolean(initialMenuId)}
                 onChange={(e) => {
                   const mId = e.target.value;
                   setMenuId(mId);
@@ -263,7 +275,7 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
                     setSubMenuId(m.submenus[0].id);
                   }
                 }}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0A2958] disabled:bg-slate-100"
               >
                 {SST_MODULES.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -334,12 +346,18 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
               <input
                 id="field-area"
                 type="text"
+                list="sst-areas-list"
                 value={area}
                 onChange={(e) => setArea(e.target.value)}
-                placeholder="Ej. Producción, Mantenimiento"
+                placeholder="Ej. MIPE, GYPSO, Poscosecha"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#0A2958]"
                 required
               />
+              <datalist id="sst-areas-list">
+                {Array.from(new Set([...storageService.getAreas(), ...CATALOGO_AREAS])).map((ar) => (
+                  <option key={ar} value={ar} />
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -369,11 +387,30 @@ export const DynamicSSTFormModal: React.FC<DynamicSSTFormModalProps> = ({
               <input
                 id="field-supervisor"
                 type="text"
+                list="sst-supervisores-list"
                 value={supervisor}
                 onChange={(e) => setSupervisor(e.target.value)}
-                placeholder="Nombre del supervisor"
+                placeholder="Buscar o ingresar supervisor..."
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#0A2958]"
               />
+              <datalist id="sst-supervisores-list">
+                {Array.from(
+                  new Set(
+                    workers
+                      .filter(
+                        (w) =>
+                          w.estado !== 'INACTIVO' &&
+                          (!sedeId ||
+                            sedeId === 'TODAS' ||
+                            String(w.sedeId || '').trim().toUpperCase() === sedeId.trim().toUpperCase()) &&
+                          (w.cargo || w.puesto || '').toUpperCase().includes('SUPERVISOR')
+                      )
+                      .map((w) => w.nombre.trim())
+                  )
+                ).map((supName) => (
+                  <option key={supName} value={supName} />
+                ))}
+              </datalist>
             </div>
 
             <div>

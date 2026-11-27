@@ -45,30 +45,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [selectedEstado, setSelectedEstado] = useState<string>('TODOS');
   const [dateRange, setDateRange] = useState<'all' | 'month' | 'quarter'>('all');
 
-  // Filtered records for dynamic dashboard cards
+  // Filtered records for dynamic dashboard cards (sorted descending, most recent first)
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      if (user?.role === 'site_lead' && user.siteId !== 'TODAS' && r.sedeId !== user.siteId) {
-        return false;
-      }
-      if (selectedSede !== 'TODAS' && r.sedeId !== selectedSede) return false;
-      if (selectedModule !== 'TODOS' && r.menuId !== selectedModule) return false;
-      if (selectedEstado !== 'TODOS' && r.estado !== selectedEstado) return false;
-
-      if (dateRange === 'month') {
-        const d = new Date(r.fecha);
-        const now = new Date();
-        if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) {
+    return records
+      .filter((r) => {
+        if (user?.role === 'site_lead' && user.siteId !== 'TODAS' && r.sedeId !== user.siteId) {
           return false;
         }
-      } else if (dateRange === 'quarter') {
-        const d = new Date(r.fecha);
-        const diffMonths = (new Date().getTime() - d.getTime()) / (1000 * 3600 * 24 * 30);
-        if (diffMonths > 3) return false;
-      }
+        if (selectedSede !== 'TODAS' && r.sedeId !== selectedSede) return false;
+        if (selectedModule !== 'TODOS' && r.menuId !== selectedModule) return false;
+        if (selectedEstado !== 'TODOS' && r.estado !== selectedEstado) return false;
 
-      return true;
-    });
+        if (dateRange === 'month') {
+          const d = new Date(r.fecha);
+          const now = new Date();
+          if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) {
+            return false;
+          }
+        } else if (dateRange === 'quarter') {
+          const d = new Date(r.fecha);
+          const diffMonths = (new Date().getTime() - d.getTime()) / (1000 * 3600 * 24 * 30);
+          if (diffMonths > 3) return false;
+        }
+
+        return true;
+      })
+      .slice()
+      .sort((a, b) => {
+        const dateB = Date.parse(b.fecha || '') || 0;
+        const dateA = Date.parse(a.fecha || '') || 0;
+        if (dateB !== dateA) return dateB - dateA;
+        const tsB = Date.parse(b.updatedAt || b.createdAt || '') || 0;
+        const tsA = Date.parse(a.updatedAt || a.createdAt || '') || 0;
+        return tsB - tsA;
+      });
   }, [records, selectedSede, selectedModule, selectedEstado, dateRange, user]);
 
   // Derived counts
@@ -452,27 +462,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <p className="text-xs text-slate-600 mt-1">Crea un nuevo registro para iniciar la trazabilidad.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
             <table className="w-full text-left text-xs" aria-label="Tabla de registros SST recientes">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10">
                 <tr>
-                  <th scope="col" className="px-4 py-3">Registro</th>
+                  <th scope="col" className="px-4 py-3">Fecha</th>
                   <th scope="col" className="px-4 py-3">Módulo / Submódulo</th>
                   <th scope="col" className="px-4 py-3">Sede & Área</th>
-                  <th scope="col" className="px-4 py-3">Fecha</th>
                   <th scope="col" className="px-4 py-3">Trabajador / Responsable</th>
                   <th scope="col" className="px-4 py-3">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRecords.slice(0, 7).map((rec) => (
+                {filteredRecords.slice(0, 15).map((rec) => (
                   <tr
                     key={rec.id}
                     onClick={() => onNavigateToModule(rec.menuId, rec.subMenuId)}
                     className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 font-bold text-[#0A2958]">
-                      {rec.numeroRegistro}
+                    <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
+                      {rec.fecha}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-800">{rec.moduloNombre}</div>
@@ -483,9 +492,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {rec.sedeId}
                       </span>
                       <span className="text-slate-600">{rec.area}</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {rec.fecha}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-800">

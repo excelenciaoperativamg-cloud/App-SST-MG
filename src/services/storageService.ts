@@ -19,6 +19,7 @@ import {
   getAnioFecha,
   EPPDeliveryRecord,
 } from '../types/epp';
+import { EmergencySheetData, EmergencySheetRow } from '../types/emergency';
 import {
   INITIAL_SEDES,
   INITIAL_SUPERVISORES,
@@ -41,6 +42,7 @@ const KEYS = {
   EPS: 'mg_sst_eps',
   ARL: 'mg_sst_arl',
   IMPORT_HISTORY: 'mg_sst_import_history',
+  EMERGENCY_SHEETS: 'mg_sst_emergency_sheets_v1',
 };
 
 // Initial sample seed workers from sheet Maestro of App_SST MG
@@ -1453,6 +1455,120 @@ export const storageService = {
     } catch (e: any) {
       return { success: false, message: `Error al restaurar: ${e.message}` };
     }
+  },
+
+  // ---------------- INSPECCIÓN EMERGENCIAS (DRIVE SHEETS DINÁMICOS) ----------------
+  getEmergencySheets(): EmergencySheetData[] {
+    try {
+      const stored = localStorage.getItem(KEYS.EMERGENCY_SHEETS);
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+
+  setEmergencySheets(sheets: EmergencySheetData[]) {
+    if (!Array.isArray(sheets)) return;
+    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(sheets));
+    this.notify();
+  },
+
+  upsertEmergencySheetRow(
+    sheetName: string,
+    row: EmergencySheetRow,
+    auditUser?: { email: string; name: string }
+  ) {
+    const sheets = this.getEmergencySheets();
+    const norm = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const targetIdx = sheets.findIndex((s) => norm(s.sheetName) === norm(sheetName));
+    if (targetIdx === -1) return;
+
+    const targetSheet = sheets[targetIdx];
+    const existingIdx = targetSheet.rows.findIndex(
+      (r) =>
+        (row.rowNumber && r.rowNumber === row.rowNumber) ||
+        (row.rowId && r.rowId === row.rowId)
+    );
+
+    const updatedRows = [...targetSheet.rows];
+    if (existingIdx !== -1) {
+      updatedRows[existingIdx] = row;
+    } else {
+      updatedRows.unshift(row);
+    }
+
+    // Update suggestions from saved row values
+    const nextSuggestions: Record<string, string[]> = { ...(targetSheet.suggestions || {}) };
+    Object.entries(row.values).forEach(([header, val]) => {
+      const cleanVal = String(val || '').trim();
+      if (cleanVal && !cleanVal.startsWith('data:image') && cleanVal.length <= 60) {
+        const list = nextSuggestions[header] || [];
+        if (!list.includes(cleanVal)) {
+          nextSuggestions[header] = [...list, cleanVal].sort();
+        }
+      }
+    });
+
+    const updatedSheets = [...sheets];
+    updatedSheets[targetIdx] = {
+      ...targetSheet,
+      rows: updatedRows,
+      suggestions: nextSuggestions,
+    };
+
+    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(updatedSheets));
+    if (auditUser) {
+      auditService.log(
+        auditUser.email,
+        auditUser.name,
+        existingIdx === -1 ? 'CREAR' : 'EDITAR',
+        `Inspección Emergencias - ${targetSheet.sheetName}`,
+        row.rowId,
+        `${existingIdx === -1 ? 'Nuevo registro' : 'Actualización'} en hoja "${targetSheet.sheetName}"`
+      );
+    }
+    this.notify();
+  },
+
+  deleteEmergencySheetRow(
+    sheetName: string,
+    rowId: string,
+    rowNumber?: number,
+    auditUser?: { email: string; name: string }
+  ): boolean {
+    const sheets = this.getEmergencySheets();
+    const norm = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const targetIdx = sheets.findIndex((s) => norm(s.sheetName) === norm(sheetName));
+    if (targetIdx === -1) return false;
+
+    const targetSheet = sheets[targetIdx];
+    const filtered = targetSheet.rows.filter(
+      (r) => !((rowNumber && r.rowNumber === rowNumber) || (rowId && r.rowId === rowId))
+    );
+    if (filtered.length === targetSheet.rows.length) return false;
+
+    const updatedSheets = [...sheets];
+    updatedSheets[targetIdx] = {
+      ...targetSheet,
+      rows: filtered,
+    };
+
+    localStorage.setItem(KEYS.EMERGENCY_SHEETS, JSON.stringify(updatedSheets));
+    if (auditUser) {
+      auditService.log(
+        auditUser.email,
+        auditUser.name,
+        'EDITAR',
+        `Inspección Emergencias - ${targetSheet.sheetName}`,
+        rowId,
+        `Eliminación de registro ${rowId} de la hoja "${targetSheet.sheetName}"`
+      );
+    }
+    this.notify();
+    return true;
   },
 
   // Notify listeners across components

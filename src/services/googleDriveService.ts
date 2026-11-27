@@ -11,10 +11,22 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { AppUser, INITIAL_APP_USERS } from '../config/users';
 import { Role } from '../types';
 import { EntregaEPPMGRecord } from '../types/epp';
+import { EmergencySheetData, EmergencySheetRow } from '../types/emergency';
 import { auditService } from './auditService';
 import { storageService } from './storageService';
 
 const APPS_SCRIPT_STORAGE_KEY = 'mg_sst_apps_script_url';
+const EMERGENCY_APPS_SCRIPT_STORAGE_KEY = 'mg_sst_emergency_apps_script_url';
+const EMERGENCY_SPREADSHEET_ID_KEY = 'mg_sst_emergency_spreadsheet_id';
+const EMERGENCY_SPREADSHEET_NAME_KEY = 'mg_sst_emergency_spreadsheet_name';
+const EMERGENCY_LAST_SYNC_KEY = 'mg_sst_emergency_last_sync';
+
+function extractSpreadsheetId(input: string): string {
+  const clean = String(input || '').trim();
+  if (!clean) return '';
+  const match = clean.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : clean;
+}
 
 // Initialize Firebase App safely (singleton)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -1048,5 +1060,242 @@ export const googleDriveService = {
    */
   getLastSyncTime(): string | null {
     return localStorage.getItem('mg_sst_drive_last_sync');
+  },
+
+  // ============================================================================
+  // INSPECCIÓN EMERGENCIAS - CONEXIÓN DRIVE MULTI-HOJA
+  // ============================================================================
+
+  getEmergencyAppsScriptUrl(): string {
+    const stored = localStorage.getItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY) || '';
+    const envUrl = (import.meta as any).env?.VITE_EMERGENCY_APPS_SCRIPT_URL || '';
+    return (stored || envUrl || '').trim();
+  },
+
+  setEmergencyAppsScriptUrl(url: string): void {
+    const clean = url.trim();
+    if (clean) {
+      localStorage.setItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY, clean);
+    } else {
+      localStorage.removeItem(EMERGENCY_APPS_SCRIPT_STORAGE_KEY);
+    }
+    window.dispatchEvent(new CustomEvent('mg-sst-emergency-script-updated', { detail: clean }));
+  },
+
+  getEmergencySpreadsheetId(): string {
+    const stored = localStorage.getItem(EMERGENCY_SPREADSHEET_ID_KEY) || '';
+    const envId = (import.meta as any).env?.VITE_EMERGENCY_SPREADSHEET_ID || '';
+    return extractSpreadsheetId(stored || envId || '');
+  },
+
+  setEmergencySpreadsheetId(inputOrId: string): void {
+    const cleanId = extractSpreadsheetId(inputOrId);
+    if (cleanId) {
+      localStorage.setItem(EMERGENCY_SPREADSHEET_ID_KEY, cleanId);
+    } else {
+      localStorage.removeItem(EMERGENCY_SPREADSHEET_ID_KEY);
+    }
+  },
+
+  getEmergencySpreadsheetName(): string {
+    return localStorage.getItem(EMERGENCY_SPREADSHEET_NAME_KEY) || 'Inspección Emergencias';
+  },
+
+  getEffectiveEmergencyAppsScriptUrl(): string {
+    return this.getEmergencyAppsScriptUrl() || this.getAppsScriptUrl();
+  },
+
+  isEmergencyDriveConfigured(): boolean {
+    const url = this.getEffectiveEmergencyAppsScriptUrl();
+    return Boolean(url && url.startsWith('https://script.google.com/'));
+  },
+
+  getEmergencyLastSyncTime(): string | null {
+    return localStorage.getItem(EMERGENCY_LAST_SYNC_KEY);
+  },
+
+  async syncEmergencySheetsFromDrive(
+    customUrl?: string,
+    customSpreadsheetId?: string
+  ): Promise<{
+    success: boolean;
+    spreadsheetId?: string;
+    spreadsheetName?: string;
+    sheets: EmergencySheetData[];
+    message: string;
+    needsConfig?: boolean;
+  }> {
+    const targetUrl = (customUrl ?? this.getEffectiveEmergencyAppsScriptUrl()).trim();
+    const targetSpreadsheetId = extractSpreadsheetId(
+      customSpreadsheetId ?? this.getEmergencySpreadsheetId()
+    );
+
+    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        sheets: [],
+        needsConfig: true,
+        message: 'Configura la conexión Drive de Inspección Emergencias para vincular sus hojas.',
+      };
+    }
+
+    try {
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      const idParam = targetSpreadsheetId
+        ? `&spreadsheetId=${encodeURIComponent(targetSpreadsheetId)}`
+        : '';
+      const res = await fetch(`${targetUrl}${separator}action=getEmergencySheets${idParam}`, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!res.ok) {
+        throw new Error(`El servidor respondió HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'No se pudo leer el archivo Inspección Emergencias.');
+      }
+
+      const sheets: EmergencySheetData[] = Array.isArray(data.sheets) ? data.sheets : [];
+      if (sheets.length > 0 && typeof sheets[0] === 'string') {
+        throw new Error(
+          'El Apps Script conectado devolvió solo nombres de hojas. Actualiza el script con la versión más reciente.'
+        );
+      }
+
+      storageService.setEmergencySheets(sheets);
+      if (data.spreadsheetId) {
+        localStorage.setItem(EMERGENCY_SPREADSHEET_ID_KEY, String(data.spreadsheetId));
+      }
+      if (data.spreadsheetName) {
+        localStorage.setItem(EMERGENCY_SPREADSHEET_NAME_KEY, String(data.spreadsheetName));
+      }
+      localStorage.setItem(EMERGENCY_LAST_SYNC_KEY, new Date().toISOString());
+
+      return {
+        success: true,
+        spreadsheetId: data.spreadsheetId,
+        spreadsheetName: data.spreadsheetName || 'Inspección Emergencias',
+        sheets,
+        message: `Sincronizadas ${sheets.length} hojas de "${data.spreadsheetName || 'Inspección Emergencias'}".`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        sheets: [],
+        message: `Error al sincronizar Inspección Emergencias: ${err?.message || 'Error de red'}`,
+      };
+    }
+  },
+
+  async saveEmergencyRowToDrive(
+    sheetName: string,
+    row: EmergencySheetRow
+  ): Promise<{
+    success: boolean;
+    row?: number;
+    rowId?: string;
+    sheetName?: string;
+    message: string;
+    needsConfig?: boolean;
+  }> {
+    const targetUrl = this.getEffectiveEmergencyAppsScriptUrl();
+    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        needsConfig: true,
+        message: 'Guardado localmente. Conecta el script de Inspección Emergencias para guardar en Drive.',
+      };
+    }
+
+    try {
+      const spreadsheetId = this.getEmergencySpreadsheetId();
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'appendEmergencyRow',
+          spreadsheetId,
+          sheetName,
+          rowId: row.rowId,
+          rowNumber: row.rowNumber,
+          values: row.values,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'No se pudo guardar la fila en Google Sheets.');
+      }
+
+      return {
+        success: true,
+        row: data.row,
+        rowId: data.rowId || row.rowId,
+        sheetName: data.sheetName || sheetName,
+        message: data.message || `Registro guardado en la hoja "${sheetName}" de Drive.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Guardado localmente. Error al enviar a Drive: ${err?.message || 'Verifica el script'}`,
+      };
+    }
+  },
+
+  async deleteEmergencyRowFromDrive(
+    sheetName: string,
+    rowId: string,
+    rowNumber?: number
+  ): Promise<{ success: boolean; message: string }> {
+    const targetUrl = this.getEffectiveEmergencyAppsScriptUrl();
+    if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+      return {
+        success: false,
+        message: 'Eliminado localmente (sin conexión Drive configurada).',
+      };
+    }
+
+    try {
+      const spreadsheetId = this.getEmergencySpreadsheetId();
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'deleteEmergencyRow',
+          spreadsheetId,
+          sheetName,
+          rowId,
+          rowNumber,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'No se pudo eliminar en Google Sheets.');
+      }
+
+      return {
+        success: true,
+        message: data.message || `Registro eliminado de la hoja "${sheetName}" en Drive.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Eliminado localmente. Error al eliminar en Drive: ${err?.message || 'Verifica el script'}`,
+      };
+    }
   },
 };

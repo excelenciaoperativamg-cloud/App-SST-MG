@@ -138,7 +138,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_EXTINTORES',
         headerColor: 'bg-[#EA580C]',
         buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-2',
@@ -148,7 +148,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_CILINDROS',
         headerColor: 'bg-[#C2410C]',
         buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-3',
@@ -158,7 +158,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_CAMILLAS',
         headerColor: 'bg-[#EA580C]',
         buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-4',
@@ -168,7 +168,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_KIT_DERRAMES',
         headerColor: 'bg-[#C2410C]',
         buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-5',
@@ -178,7 +178,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_SENSORES_HUMO',
         headerColor: 'bg-[#EA580C]',
         buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-6',
@@ -188,7 +188,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_LAMPARAS',
         headerColor: 'bg-[#C2410C]',
         buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-7',
@@ -198,7 +198,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_LAVA_OJOS',
         headerColor: 'bg-[#EA580C]',
         buttonColor: 'bg-[#EA580C] hover:bg-orange-700',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
       {
         id: 'sub-em-8',
@@ -208,7 +208,7 @@ export const SST_MODULES: MenuModuleConfig[] = [
         codigo: 'EM_RESCATE_ACUATICO',
         headerColor: 'bg-[#C2410C]',
         buttonColor: 'bg-[#C2410C] hover:bg-orange-800',
-        formularioOficialPendiente: true,
+        formularioOficialPendiente: false,
       },
     ],
   },

@@ -535,5 +535,36 @@ export const exportService = {
 
     doc.save(`Entrega_EPP_${idActa}.pdf`);
   },
+
+  /**
+   * Exporta cualquier hoja dinámica de Inspección Emergencias a Excel (.xlsx)
+   */
+  exportEmergencySheetToExcel(
+    sheetName: string,
+    headers: string[],
+    rows: import('../types/emergency').EmergencySheetRow[],
+    fileName?: string
+  ) {
+    const formattedData = rows.map((r) => {
+      const obj: Record<string, string> = {};
+      headers.forEach((h) => {
+        const val = r.values[h] ?? '';
+        obj[h] = val.startsWith('data:image') ? 'Evidencia Digital Adjunta' : val;
+      });
+      return obj;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
+    const workbook = XLSX.utils.book_new();
+    const safeSheetName = sheetName.replace(/[\\/?*[\]]/g, '').slice(0, 31) || 'Inspeccion';
+    XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName);
+
+    worksheet['!cols'] = headers.map((h) => ({
+      wch: Math.min(Math.max(h.length + 6, 14), 38),
+    }));
+
+    const baseName = fileName || `Inspeccion_Emergencias_${safeSheetName}`;
+    XLSX.writeFile(workbook, `${baseName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  },
 };
 

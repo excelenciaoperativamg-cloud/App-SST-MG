@@ -183,12 +183,12 @@ export const PersonnelMasterView: React.FC = () => {
 
       {/* Workers Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
           <table
             className="w-full text-left text-xs"
             aria-label="Listado de Trabajadores del Maestro de Personal"
           >
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10">
               <tr>
                 <th scope="col" className="px-4 py-3">Cédula</th>
                 <th scope="col" className="px-4 py-3">Nombre del Trabajador</th>

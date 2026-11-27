@@ -6,9 +6,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { LoginView } from './components/auth/LoginView';
 import { EPPDeliveryModuleView } from './components/epp/EPPDeliveryModuleView';
 import { PersonnelMasterView } from './components/personnel/PersonnelMasterView';
-import { CatalogsView } from './components/catalogs/CatalogsView';
-import { AuditView } from './components/audit/AuditView';
-import { SettingsView } from './components/settings/SettingsView';
+import { SSTModuleView } from './components/forms/SSTModuleView';
 import { Lock, Shield, ArrowRight } from 'lucide-react';
 import { googleDriveService, TARGET_DRIVE_FOLDER } from './services/googleDriveService';
 
@@ -25,7 +23,7 @@ function InactiveModuleNotice({ onGoToEPP }: { onGoToEPP: () => void }) {
         Este módulo y formulario se encuentran inactivos
       </h2>
       <p className="text-xs text-slate-500 mt-2 max-w-lg mx-auto leading-relaxed">
-        Siguiendo las directrices operativas del proyecto SST de MG Consultores, actualmente estamos operando en la <strong>Fase 1 con el Módulo de Personal y el formulario oficial de Entrega de EPP's</strong>. Los demás módulos se habilitarán progresivamente.
+        Siguiendo las directrices operativas del proyecto SST de MG Consultores, actualmente se encuentran habilitados los módulos de <strong>Personal (Entrega Epp´s MG)</strong> e <strong>Inspección Emergencias</strong>. Los demás módulos se habilitarán progresivamente.
       </p>
       <div className="mt-6 flex items-center justify-center gap-3">
         <button
@@ -42,9 +40,10 @@ function InactiveModuleNotice({ onGoToEPP }: { onGoToEPP: () => void }) {
 }
 
 function MainApp() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('epp_delivery');
+  const [activeEmergencySubMenuId, setActiveEmergencySubMenuId] = useState('sub-em-1');
 
   // Automatic background sync with Google Drive when app is active
   React.useEffect(() => {
@@ -93,17 +92,19 @@ function MainApp() {
           <div className="mx-auto max-w-7xl space-y-6">
             {activeView === 'epp_delivery' && <EPPDeliveryModuleView />}
 
-            {activeView === 'personnel' && <PersonnelMasterView />}
+            {activeView === 'emergencias' && (
+              <SSTModuleView
+                moduleId="d19d30b0"
+                activeSubMenuId={activeEmergencySubMenuId}
+                onSelectSubMenu={setActiveEmergencySubMenuId}
+              />
+            )}
+
+            {activeView === 'personnel' && user?.role === 'admin' && <PersonnelMasterView />}
 
             {activeView.startsWith('inactive_') && (
               <InactiveModuleNotice onGoToEPP={() => setActiveView('epp_delivery')} />
             )}
-
-            {activeView === 'catalogs' && <CatalogsView />}
-
-            {activeView === 'audit' && <AuditView />}
-
-            {activeView === 'settings' && <SettingsView />}
 
             {/* Semantic Footer */}
             <footer role="contentinfo" className="border-t border-slate-200/80 pt-4 text-center text-xs text-slate-500 no-print">

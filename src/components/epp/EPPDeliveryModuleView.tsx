@@ -28,6 +28,22 @@ import { EPPDeliveryFormModal } from './EPPDeliveryFormModal';
 import { AppsScriptConnectionModal } from './AppsScriptConnectionModal';
 import { TipoEntregaBarChart } from './TipoEntregaBarChart';
 
+const parseEppDateTimestamp = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
+  if (!str) return 0;
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])).getTime();
+  }
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmyMatch) {
+    return new Date(Number(dmyMatch[3]), Number(dmyMatch[2]) - 1, Number(dmyMatch[1])).getTime();
+  }
+  const parsed = Date.parse(str);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 export const EPPDeliveryModuleView: React.FC = () => {
   const { user, activeSiteId, switchSite } = useAuth();
   const sedes = storageService.getSedes();
@@ -103,11 +119,10 @@ export const EPPDeliveryModuleView: React.FC = () => {
       if (selectedSede !== 'TODAS' && itemSede !== selectedSede.trim().toUpperCase()) return false;
     }
 
-    // Search query across 19 fields
+    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matches =
-        (item.Id_Epp && item.Id_Epp.toLowerCase().includes(q)) ||
         (item.Nombre && item.Nombre.toLowerCase().includes(q)) ||
         (item.Cédula && item.Cédula.toLowerCase().includes(q)) ||
         (item.Labor && item.Labor.toLowerCase().includes(q)) ||
@@ -134,16 +149,25 @@ export const EPPDeliveryModuleView: React.FC = () => {
     return Array.from(seen.values());
   }, [deliveries]);
 
-  const filteredDeliveries = sedeAndSearchFilteredDeliveries.filter((item) => {
-    // Tipo entrega filter
-    if (
-      selectedTipo !== 'TODOS' &&
-      String(item.Tipo_Entrega || '').trim().toUpperCase() !== selectedTipo.trim().toUpperCase()
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const filteredDeliveries = sedeAndSearchFilteredDeliveries
+    .filter((item) => {
+      // Tipo entrega filter
+      if (
+        selectedTipo !== 'TODOS' &&
+        String(item.Tipo_Entrega || '').trim().toUpperCase() !== selectedTipo.trim().toUpperCase()
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      const dateDiff = parseEppDateTimestamp(b.Fecha) - parseEppDateTimestamp(a.Fecha);
+      if (dateDiff !== 0) return dateDiff;
+      const timeB = parseEppDateTimestamp(b.updatedAt || b.createdAt);
+      const timeA = parseEppDateTimestamp(a.updatedAt || a.createdAt);
+      return timeB - timeA;
+    });
 
   // Calculate KPIs
   const totalRegistros = filteredDeliveries.length;
@@ -176,13 +200,13 @@ export const EPPDeliveryModuleView: React.FC = () => {
         const driveRes = await googleDriveService.deleteEntregaEPPRecordFromDrive(deleteTarget.Id_Epp);
         loadDeliveries();
         if (driveRes.success) {
-          showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado del sistema y de Entrega Epp´s MG.`);
+          showNotification('success', `Registro de ${deleteTarget.Nombre} eliminado del sistema y de Entrega Epp´s MG.`);
         } else {
-          showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado localmente. (${driveRes.message})`);
+          showNotification('success', `Registro de ${deleteTarget.Nombre} eliminado localmente. (${driveRes.message})`);
         }
       } else {
         loadDeliveries();
-        showNotification('success', `Registro ${deleteTarget.Id_Epp} eliminado.`);
+        showNotification('success', `Registro de ${deleteTarget.Nombre} eliminado.`);
       }
       setDeleteTarget(null);
     } finally {
@@ -200,11 +224,11 @@ export const EPPDeliveryModuleView: React.FC = () => {
       storageService.saveEntregaEPPRecord(record, { email: user.email, name: user.displayName });
       setIsModalOpen(false);
       if (driveSyncResult?.success) {
-        showNotification('success', `Registro ${record.Id_Epp} guardado localmente y sincronizado en Entrega Epp´s MG (Drive).`);
+        showNotification('success', `Registro de ${record.Nombre} guardado localmente y sincronizado en Entrega Epp´s MG (Drive).`);
       } else if (driveSyncResult && !driveSyncResult.success) {
         showNotification('error', driveSyncResult.message);
       } else {
-        showNotification('success', `Registro ${record.Id_Epp} guardado en la hoja Entrega Epp´s MG.`);
+        showNotification('success', `Registro de ${record.Nombre} guardado en la hoja Entrega Epp´s MG.`);
       }
     }
   };
@@ -376,7 +400,7 @@ export const EPPDeliveryModuleView: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Buscar por Id_Epp, trabajador, cédula, labor, área o EPP..."
+              placeholder="Buscar por trabajador, cédula, labor, área o EPP..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A2958]"
@@ -464,11 +488,11 @@ export const EPPDeliveryModuleView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#0A2958] text-white uppercase text-[10px] font-bold tracking-wider">
+              <thead className="bg-[#0A2958] text-white uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10">
                 <tr>
-                  <th className="px-3.5 py-3">Id_Epp / Fecha</th>
+                  <th className="px-3.5 py-3">Fecha</th>
                   <th className="px-3 py-3">Sede</th>
                   <th className="px-3.5 py-3">Trabajador (Cédula & Nombre)</th>
                   <th className="px-3 py-3">Labor / Area</th>
@@ -483,11 +507,11 @@ export const EPPDeliveryModuleView: React.FC = () => {
               <tbody className="divide-y divide-slate-200">
                 {filteredDeliveries.map((delivery) => (
                   <tr key={delivery.id || delivery.Id_Epp} className="hover:bg-slate-50 transition-colors">
-                    {/* 1. Id_Epp & 2. Fecha (Año, Mes) */}
-                    <td className="px-3.5 py-3">
-                      <div className="font-mono font-bold text-[#0A2958]">{delivery.Id_Epp}</div>
+                    {/* Fecha (Año, Mes) */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <div className="font-bold text-[#0A2958]">{delivery.Fecha}</div>
                       <div className="text-[11px] text-slate-500">
-                        {delivery.Fecha} <span className="text-slate-400">({delivery.Mes})</span>
+                        {delivery.Mes} {delivery.Año}
                       </div>
                     </td>
 
@@ -630,10 +654,10 @@ export const EPPDeliveryModuleView: React.FC = () => {
             <div className="bg-[#0A2958] text-white p-5 flex items-center justify-between border-b-2 border-[#E60000]">
               <div>
                 <span className="text-xs uppercase font-mono text-emerald-300 font-bold">
-                  Hoja: Entrega Epp´s MG • {inspectDelivery.Id_Epp}
+                  Hoja: Entrega Epp´s MG
                 </span>
                 <h3 className="text-lg font-bold text-white mt-0.5">
-                  Detalle Oficial de los 19 Campos
+                  Detalle Oficial del Registro
                 </h3>
               </div>
               <button
@@ -645,12 +669,8 @@ export const EPPDeliveryModuleView: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-              {/* Grid with 19 fields */}
+              {/* Grid with detail fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-slate-500 text-[10px] uppercase font-bold block">1. Id_Epp:</span>
-                  <span className="font-mono font-bold text-slate-900">{inspectDelivery.Id_Epp}</span>
-                </div>
                 <div>
                   <span className="text-slate-500 text-[10px] uppercase font-bold block">2, 3, 4. Fecha / Periodo:</span>
                   <span className="font-semibold text-slate-900">
@@ -828,8 +848,8 @@ export const EPPDeliveryModuleView: React.FC = () => {
             </div>
             <div className="p-5 text-xs text-slate-700 space-y-2">
               <p>
-                ¿Está seguro de eliminar el registro <span className="font-mono font-bold text-[#0A2958]">{deleteTarget.Id_Epp}</span> de{' '}
-                <span className="font-bold text-slate-900">{deleteTarget.Nombre}</span>?
+                ¿Está seguro de eliminar el registro de{' '}
+                <span className="font-bold text-slate-900">{deleteTarget.Nombre}</span> ({deleteTarget.Fecha})?
               </p>
               {isAppsScriptConnected && (
                 <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">

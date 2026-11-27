@@ -32,29 +32,38 @@ export const ReportsView: React.FC = () => {
   const [search, setSearch] = useState('');
 
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      if (user?.role === 'site_lead' && user.siteId !== 'TODAS' && r.sedeId !== user.siteId) {
-        return false;
-      }
-      if (selectedSede !== 'TODAS' && r.sedeId !== selectedSede) return false;
-      if (selectedModule !== 'TODOS' && r.menuId !== selectedModule) return false;
-      if (selectedEstado !== 'TODOS' && r.estado !== selectedEstado) return false;
-      if (selectedWorker !== 'TODOS' && r.cedulaTrabajador !== selectedWorker) return false;
-      if (fechaInicio && r.fecha < fechaInicio) return false;
-      if (fechaFin && r.fecha > fechaFin) return false;
-      if (search.trim()) {
-        const query = search.toLowerCase();
-        const matches =
-          r.numeroRegistro.toLowerCase().includes(query) ||
-          r.moduloNombre.toLowerCase().includes(query) ||
-          r.subModuloNombre.toLowerCase().includes(query) ||
-          r.area.toLowerCase().includes(query) ||
-          (r.nombreTrabajador && r.nombreTrabajador.toLowerCase().includes(query)) ||
-          r.observaciones.toLowerCase().includes(query);
-        if (!matches) return false;
-      }
-      return true;
-    });
+    return records
+      .filter((r) => {
+        if (user?.role === 'site_lead' && user.siteId !== 'TODAS' && r.sedeId !== user.siteId) {
+          return false;
+        }
+        if (selectedSede !== 'TODAS' && r.sedeId !== selectedSede) return false;
+        if (selectedModule !== 'TODOS' && r.menuId !== selectedModule) return false;
+        if (selectedEstado !== 'TODOS' && r.estado !== selectedEstado) return false;
+        if (selectedWorker !== 'TODOS' && r.cedulaTrabajador !== selectedWorker) return false;
+        if (fechaInicio && r.fecha < fechaInicio) return false;
+        if (fechaFin && r.fecha > fechaFin) return false;
+        if (search.trim()) {
+          const query = search.toLowerCase();
+          const matches =
+            r.moduloNombre.toLowerCase().includes(query) ||
+            r.subModuloNombre.toLowerCase().includes(query) ||
+            r.area.toLowerCase().includes(query) ||
+            (r.nombreTrabajador && r.nombreTrabajador.toLowerCase().includes(query)) ||
+            r.observaciones.toLowerCase().includes(query);
+          if (!matches) return false;
+        }
+        return true;
+      })
+      .slice()
+      .sort((a, b) => {
+        const dateB = Date.parse(b.fecha || '') || 0;
+        const dateA = Date.parse(a.fecha || '') || 0;
+        if (dateB !== dateA) return dateB - dateA;
+        const tsB = Date.parse(b.updatedAt || b.createdAt || '') || 0;
+        const tsA = Date.parse(a.updatedAt || a.createdAt || '') || 0;
+        return tsB - tsA;
+      });
   }, [records, selectedSede, selectedModule, selectedEstado, selectedWorker, fechaInicio, fechaFin, search, user]);
 
   const handleExportExcel = () => {
@@ -214,7 +223,7 @@ export const ReportsView: React.FC = () => {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por texto en observaciones, hallazgos, áreas o número de registro..."
+            placeholder="Buscar por texto en observaciones, hallazgos, áreas o trabajador..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs font-medium focus:ring-2 focus:ring-[#0A2958]"
@@ -233,15 +242,14 @@ export const ReportsView: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3">N° Registro</th>
+                <th className="px-4 py-3">Fecha</th>
                 <th className="px-4 py-3">Módulo</th>
                 <th className="px-4 py-3">Submódulo</th>
                 <th className="px-4 py-3">Sede & Área</th>
-                <th className="px-4 py-3">Fecha</th>
                 <th className="px-4 py-3">Trabajador / Responsable</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3 text-right">PDF</th>
@@ -250,16 +258,14 @@ export const ReportsView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
                     No se encontraron registros coincidentes con los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
                 filteredRecords.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono font-bold text-[#0A2958] whitespace-nowrap">
-                      {r.numeroRegistro}
-                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">{r.fecha}</td>
                     <td className="px-4 py-3 font-semibold text-slate-800">{r.moduloNombre}</td>
                     <td className="px-4 py-3 text-slate-600">{r.subModuloNombre}</td>
                     <td className="px-4 py-3">
@@ -268,7 +274,6 @@ export const ReportsView: React.FC = () => {
                       </span>
                       {r.area}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.fecha}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {r.nombreTrabajador || r.responsableRegistro}
                     </td>
